@@ -279,8 +279,8 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({
       const angle = Math.atan2(dy, dx);
       const roadLengthPx = Math.sqrt(dx * dx + dy * dy);
 
-      // Standard lane width: 4m world * zoom
-      const laneWidthPx = Math.max(3, 4.0 * viewport.zoom);
+      // Standard lane width: 6m world * zoom
+      const laneWidthPx = Math.max(8, 6.0 * viewport.zoom);
       const roadWidthPx = edge.lanes * laneWidthPx;
 
       const isSelected = selection?.type === 'edge' && selection.id === edge.id;
@@ -291,13 +291,14 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({
       ctx.translate(p1.x, p1.y);
       ctx.rotate(angle);
 
-      // Congestion Heatmap or Base Asphalt Fill
-      let roadColor = '#1e293b'; // standard slate-800 asphalt
-      if (simulationFrame?.metrics?.roadCongestion?.[edge.id]) {
-        const cong = simulationFrame.metrics.roadCongestion[edge.id];
-        if (cong.volumeToCapacityRatio < 0.5) roadColor = '#134e4a'; // dark teal / free flow
-        else if (cong.volumeToCapacityRatio < 0.75) roadColor = '#713f12'; // amber / moderate
-        else if (cong.volumeToCapacityRatio < 0.9) roadColor = '#7c2d12'; // orange / heavy
+      // Congestion Heatmap or Base Asphalt Fill: derived strictly from real vehicle density
+      let roadColor = '#1e293b'; // standard clean slate-800 asphalt
+      const cong = simulationFrame?.metrics?.roadCongestion?.[edge.id];
+      if (cong && cong.vehicleCount > 0) {
+        const ratio = cong.volumeToCapacityRatio ?? cong.densityRatio ?? 0;
+        if (ratio < 0.3) roadColor = '#134e4a'; // dark teal / free flow
+        else if (ratio < 0.6) roadColor = '#854d0e'; // amber / moderate
+        else if (ratio < 0.85) roadColor = '#9a3412'; // orange / heavy
         else roadColor = '#881337'; // red / severe congestion
       }
 
@@ -463,7 +464,12 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({
       const fromNode = nodes.find((n) => n.id === edge.fromNodeId);
       if (!targetNode || !fromNode) continue;
 
-      // Position signal 15m before intersection along edge direction
+      // Only display traffic signals on approaches arriving at signalized intersections
+      if (targetNode.controlType !== 'fixed_signal' && targetNode.controlType !== 'adaptive_signal') {
+        continue;
+      }
+
+      // Position signal and stop bar 12m before intersection node center
       const dx = targetNode.x - fromNode.x;
       const dy = targetNode.y - fromNode.y;
       const length = Math.sqrt(dx * dx + dy * dy);
@@ -471,50 +477,82 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({
 
       const unitX = dx / length;
       const unitY = dy / length;
-      const stopDistance = Math.min(length * 0.9, length - 10);
+      const stopDistance = Math.max(10, length - 12);
 
-      const sigWorldX = fromNode.x + unitX * stopDistance;
-      const sigWorldY = fromNode.y + unitY * stopDistance;
+      const stopWorldX = fromNode.x + unitX * stopDistance;
+      const stopWorldY = fromNode.y + unitY * stopDistance;
 
-      // Lateral offset to roadside
+      // Normal vector pointing perpendicular to road
       const normalX = -unitY;
       const normalY = unitX;
-      const roadsideDist = (edge.lanes * 4.0) / 2 + 3.0;
+      const laneWidth = 6.0;
+      const roadWidthHalf = (edge.lanes * laneWidth) / 2;
+      const roadsideDist = roadWidthHalf + 5.0;
 
-      const finalSigWorldX = sigWorldX + normalX * roadsideDist;
-      const finalSigWorldY = sigWorldY + normalY * roadsideDist;
+      // 1. Draw crisp white stop line across the approach lanes
+      const stopP1 = worldToScreen(
+        stopWorldX - normalX * roadWidthHalf,
+        stopWorldY - normalY * roadWidthHalf,
+        width,
+        height
+      );
+      const stopP2 = worldToScreen(
+        stopWorldX + normalX * roadWidthHalf,
+        stopWorldY + normalY * roadWidthHalf,
+        width,
+        height
+      );
+      ctx.save();
+      ctx.strokeStyle = '#f8fafc';
+      ctx.lineWidth = Math.max(2, 2.5 * viewport.zoom);
+      ctx.beginPath();
+      ctx.moveTo(stopP1.x, stopP1.y);
+      ctx.lineTo(stopP2.x, stopP2.y);
+      ctx.stroke();
+      ctx.restore();
 
+      // 2. Position signal head housing on roadside
+      const finalSigWorldX = stopWorldX + normalX * roadsideDist;
+      const finalSigWorldY = stopWorldY + normalY * roadsideDist;
       const p = worldToScreen(finalSigWorldX, finalSigWorldY, width, height);
 
       // Signal Light Aspect Color
       let bulbColor = '#ef4444'; // Red
-      let shadowColor = 'rgba(239, 68, 68, 0.7)';
+      let shadowColor = 'rgba(239, 68, 68, 0.85)';
       if (sig.state === 'GREEN') {
         bulbColor = '#22c55e';
-        shadowColor = 'rgba(34, 197, 94, 0.7)';
+        shadowColor = 'rgba(34, 197, 94, 0.85)';
       } else if (sig.state === 'YELLOW') {
         bulbColor = '#f59e0b';
-        shadowColor = 'rgba(245, 158, 11, 0.7)';
+        shadowColor = 'rgba(245, 158, 11, 0.85)';
       }
 
-      // Draw Signal Head Housing
-      const bulbRadius = Math.max(3.5, 4.5 * viewport.zoom);
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, bulbRadius + 2, 0, Math.PI * 2);
-      ctx.fillStyle = '#0f172a';
-      ctx.fill();
+      // Draw Signal Head Housing (square signal box)
+      const bulbRadius = Math.max(6, 6.0 * viewport.zoom);
+      const boxSize = bulbRadius * 2.4;
+
+      ctx.save();
+      ctx.fillStyle = '#020617';
       ctx.strokeStyle = '#475569';
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(p.x - boxSize / 2, p.y - boxSize / 2, boxSize, boxSize);
+      ctx.strokeRect(p.x - boxSize / 2, p.y - boxSize / 2, boxSize, boxSize);
 
       // Glowing Lamp Bulb
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 12;
       ctx.shadowColor = shadowColor;
       ctx.beginPath();
       ctx.arc(p.x, p.y, bulbRadius, 0, Math.PI * 2);
       ctx.fillStyle = bulbColor;
       ctx.fill();
       ctx.shadowBlur = 0;
+
+      // Bright inner core
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, bulbRadius * 0.4, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.restore();
     }
     ctx.restore();
   };
@@ -530,9 +568,9 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({
       ctx.translate(pos.x, pos.y);
       ctx.rotate(v.angle);
 
-      // Vehicle Dimensions in pixels
-      const carLength = Math.max(6, 4.5 * viewport.zoom);
-      const carWidth = Math.max(3, 2.2 * viewport.zoom);
+      // Vehicle Dimensions in pixels: clearly visible miniature vehicles
+      const carLength = Math.max(14, 12 * viewport.zoom);
+      const carWidth = Math.max(7, 6 * viewport.zoom);
 
       // Vehicle color by velocity
       let carColor = '#38bdf8'; // Free flow cruising (sky blue)
@@ -548,19 +586,17 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({
 
       // Windshield & roof
       ctx.fillStyle = '#0f172a';
-      ctx.fillRect(-carLength * 0.1, -carWidth * 0.4, carLength * 0.4, carWidth * 0.8);
+      ctx.fillRect(-carLength * 0.1, -carWidth * 0.35, carLength * 0.45, carWidth * 0.7);
 
       // Headlights (front)
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(carLength / 2 - 1, -carWidth / 2 + 0.5, 1, 1);
-      ctx.fillRect(carLength / 2 - 1, carWidth / 2 - 1.5, 1, 1);
+      ctx.fillRect(carLength / 2 - 2, -carWidth / 2 + 1, 2, 2);
+      ctx.fillRect(carLength / 2 - 2, carWidth / 2 - 3, 2, 2);
 
-      // Brake lights (rear if stopping)
-      if (v.velocity < 1.0) {
-        ctx.fillStyle = '#ef4444';
-        ctx.fillRect(-carLength / 2, -carWidth / 2 + 0.5, 1, 1);
-        ctx.fillRect(-carLength / 2, carWidth / 2 - 1.5, 1, 1);
-      }
+      // Brake lights (rear)
+      ctx.fillStyle = v.velocity < 1.0 ? '#ef4444' : '#991b1b';
+      ctx.fillRect(-carLength / 2, -carWidth / 2 + 1, 2, 2);
+      ctx.fillRect(-carLength / 2, carWidth / 2 - 3, 2, 2);
 
       ctx.restore();
     }

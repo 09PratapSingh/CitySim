@@ -180,3 +180,102 @@ test('Signals: NetworkSimulation automatically connects signal controllers to st
   assert.strictEqual(sim.getSignalStateForEdge('in_S'), 'GREEN');
   assert.strictEqual(sim.getSignalStateForEdge('in_W'), 'RED');
 });
+
+test('Signals: Auto-generates signal controller and alternating phases for node without explicit signalConfig', () => {
+  const graph = new RoadGraph();
+
+  // Signalized node with NO signalConfig property
+  graph.addNode({
+    id: 'node_center',
+    x: 200,
+    y: 200,
+    controlType: 'fixed_signal',
+    incomingEdgeIds: ['road_W_C', 'road_S_C'],
+    outgoingEdgeIds: ['road_C_E', 'road_C_N'],
+  });
+
+  graph.addNode({ id: 'node_west', x: 50, y: 200, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] });
+  graph.addNode({ id: 'node_south', x: 200, y: 350, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] });
+  graph.addNode({ id: 'node_east', x: 350, y: 200, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] });
+  graph.addNode({ id: 'node_north', x: 200, y: 50, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] });
+
+  graph.addEdge({ id: 'road_W_C', fromNodeId: 'node_west', toNodeId: 'node_center', length: 150, speedLimit: 13.89, lanes: 2, isOneWay: true });
+  graph.addEdge({ id: 'road_S_C', fromNodeId: 'node_south', toNodeId: 'node_center', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true });
+  graph.addEdge({ id: 'road_C_E', fromNodeId: 'node_center', toNodeId: 'node_east', length: 150, speedLimit: 13.89, lanes: 2, isOneWay: true });
+  graph.addEdge({ id: 'road_C_N', fromNodeId: 'node_center', toNodeId: 'node_north', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true });
+
+  const node = graph.getNode('node_center')!;
+  const controller = SignalControllerFactory.create(node, graph);
+
+  // Must successfully create a controller with 2 alternating phases
+  assert.notStrictEqual(controller, null);
+  const phases = controller!.getPhases();
+  assert.strictEqual(phases.length, 2);
+  assert.strictEqual(phases[0].greenEdgeIds.includes('road_W_C'), true);
+  assert.strictEqual(phases[1].greenEdgeIds.includes('road_S_C'), true);
+});
+
+test('Signals: Default 4-way intersection cycles phases over time and vehicles stop on red with average wait time > 0', () => {
+  const defaultMap = {
+    nodes: [
+      { id: 'node_center', x: 200, y: 200, controlType: 'fixed_signal', incomingEdgeIds: ['road_W_C', 'road_S_C'], outgoingEdgeIds: ['road_C_E', 'road_C_N'] },
+      { id: 'node_west', x: 50, y: 200, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] },
+      { id: 'node_south', x: 200, y: 350, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] },
+      { id: 'node_east', x: 350, y: 200, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] },
+      { id: 'node_north', x: 200, y: 50, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] },
+    ],
+    edges: [
+      { id: 'road_W_C', fromNodeId: 'node_west', toNodeId: 'node_center', length: 150, speedLimit: 13.89, lanes: 2, isOneWay: true },
+      { id: 'road_S_C', fromNodeId: 'node_south', toNodeId: 'node_center', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+      { id: 'road_C_E', fromNodeId: 'node_center', toNodeId: 'node_east', length: 150, speedLimit: 13.89, lanes: 2, isOneWay: true },
+      { id: 'road_C_N', fromNodeId: 'node_center', toNodeId: 'node_north', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+    ],
+  };
+
+  const graph = RoadGraph.fromJSON(defaultMap as any);
+  const odPairs = [
+    { originNodeId: 'node_west', destinationNodeId: 'node_east', arrivalRatePerHour: 600 },
+    { originNodeId: 'node_south', destinationNodeId: 'node_north', arrivalRatePerHour: 600 },
+  ];
+
+  const sim = new NetworkSimulation({
+    graph,
+    config: { seed: 42, timeStep: 0.1 },
+    odPairs,
+  });
+
+  // Center node must have an instantiated controller
+  const ctrl = sim.getSignalController('node_center');
+  assert.notStrictEqual(ctrl, undefined);
+
+  // Initial state: Approach 1 is GREEN, Approach 2 is RED
+  const initialW = sim.getSignalStateForEdge('road_W_C');
+  const initialS = sim.getSignalStateForEdge('road_S_C');
+  assert.strictEqual(initialW, 'GREEN');
+  assert.strictEqual(initialS, 'RED');
+
+  // Step 26 seconds: Phase 1 green (25s) ends, transitions to YELLOW (3s)
+  sim.step(260);
+  assert.strictEqual(sim.getSignalStateForEdge('road_W_C'), 'YELLOW');
+  assert.strictEqual(sim.getSignalStateForEdge('road_S_C'), 'RED');
+
+  // Step 3.5 more seconds: Yellow + all-red clearance completes, Phase 2 starts (S is GREEN, W is RED)
+  sim.step(35);
+  assert.strictEqual(sim.getSignalStateForEdge('road_W_C'), 'RED');
+  assert.strictEqual(sim.getSignalStateForEdge('road_S_C'), 'GREEN');
+
+  // Run for a total of 120 seconds (1200 ticks) to let vehicles arrive, stop on red, and queue
+  sim.step(905);
+
+  const metrics = sim.getMetrics();
+
+  // Average wait time must be strictly positive because vehicles queued at the red signal
+  assert.strictEqual(metrics.averageWaitTime > 0, true);
+
+  // Max queue length must be observed
+  assert.strictEqual(metrics.maxQueueLength > 0, true);
+
+  // Active vehicles are present and total spawned equals active + completed
+  assert.strictEqual(metrics.activeVehiclesCount > 0, true);
+  assert.strictEqual(metrics.totalSpawned, metrics.activeVehiclesCount + metrics.completedVehiclesCount);
+});

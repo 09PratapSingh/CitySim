@@ -151,10 +151,22 @@ export class MetricsCollector {
       sumFreeFlowTime += freeFlow;
     }
 
+    // Also include delay and travel time from active vehicles currently traversing or queuing
+    let activeWaitTime = 0;
+    let activeTravelTime = 0;
+    for (const v of activeVehicles) {
+      activeWaitTime += v.totalWaitTime;
+      activeTravelTime += Math.max(0, currentTime - v.spawnTime);
+    }
+
+    const totalEvaluated = completedCount + activeVehicles.length;
+    const combinedWaitTime = sumWaitTime + activeWaitTime;
+    const combinedTravelTime = sumTravelTime + activeTravelTime;
+
     const averageTravelTime =
-      completedCount > 0 ? sumTravelTime / completedCount : 0;
+      totalEvaluated > 0 ? combinedTravelTime / totalEvaluated : 0;
     const averageWaitTime =
-      completedCount > 0 ? sumWaitTime / completedCount : 0;
+      totalEvaluated > 0 ? combinedWaitTime / totalEvaluated : 0;
     const freeFlowTravelTimeAvg =
       completedCount > 0 ? sumFreeFlowTime / completedCount : 0;
 
@@ -165,7 +177,7 @@ export class MetricsCollector {
         : 1.0;
 
     // Total accumulated vehicle delay in hours
-    const totalDelayHours = sumWaitTime / 3600;
+    const totalDelayHours = combinedWaitTime / 3600;
 
     // Active speed mean
     let sumSpeed = 0;
@@ -178,19 +190,32 @@ export class MetricsCollector {
     const queueLengthByEdge = this.computeQueuesByEdge(activeVehicles);
     const roadCongestion = this.computeSegmentCongestion(activeVehicles);
 
+    const safeSimTime = Number(currentTime.toFixed(2));
+    const safeAvgSpeed = Number((isNaN(averageSpeed) ? 0 : averageSpeed).toFixed(2));
+    const safeAvgWait = Number((isNaN(averageWaitTime) ? 0 : averageWaitTime).toFixed(2));
+    const safeAvgTravel = Number((isNaN(averageTravelTime) ? 0 : averageTravelTime).toFixed(2));
+    const safeThroughput = Number((completedCount / elapsedHours).toFixed(1));
+
     return {
-      simulationTime: Number(currentTime.toFixed(2)),
+      simulationTime: safeSimTime,
+      currentTime: safeSimTime,
       activeVehiclesCount: activeVehicles.length,
+      activeVehicleCount: activeVehicles.length,
       completedVehiclesCount: completedCount,
+      totalCompleted: completedCount,
       totalSpawned,
-      averageSpeed: Number(averageSpeed.toFixed(2)),
-      averageWaitTime: Number(averageWaitTime.toFixed(2)),
-      averageTravelTime: Number(averageTravelTime.toFixed(2)),
+      totalGenerated: totalSpawned,
+      averageSpeed: safeAvgSpeed,
+      avgSpeed: safeAvgSpeed,
+      averageWaitTime: safeAvgWait,
+      avgWaitTime: safeAvgWait,
+      averageTravelTime: safeAvgTravel,
+      avgTravelTime: safeAvgTravel,
       freeFlowTravelTimeAvg: Number(freeFlowTravelTimeAvg.toFixed(2)),
       travelTimeIndex: Number(travelTimeIndex.toFixed(2)),
       totalDelayHours: Number(totalDelayHours.toFixed(4)),
       maxQueueLength: this.peakQueueLength,
-      throughputPerHour: Number((completedCount / elapsedHours).toFixed(1)),
+      throughputPerHour: safeThroughput,
       queueLengthByEdge,
       roadCongestion,
       timeSeries: [...this.timeSeries],
@@ -228,6 +253,22 @@ export class MetricsCollector {
       const densityRatio =
         maxCapacity > 0 ? Math.min(1.0, vehicleCount / maxCapacity) : 0;
 
+      // Real vehicle density in vehicles per kilometer per lane
+      const roadLengthKm = Math.max(0.001, edge.length / 1000);
+      const density = (vehicleCount / (roadLengthKm * edge.lanes));
+
+      // Categorize congestion level based strictly on actual density ratio (Volume / Capacity)
+      let congestionLevel: 'FREE_FLOW' | 'MODERATE' | 'HEAVY' | 'CONGESTED' = 'FREE_FLOW';
+      if (densityRatio >= 0.85) {
+        congestionLevel = 'CONGESTED';
+      } else if (densityRatio >= 0.6) {
+        congestionLevel = 'HEAVY';
+      } else if (densityRatio >= 0.3) {
+        congestionLevel = 'MODERATE';
+      } else {
+        congestionLevel = 'FREE_FLOW';
+      }
+
       let sumV = 0;
       let queueCount = 0;
       for (const v of vehsOnEdge) {
@@ -237,14 +278,18 @@ export class MetricsCollector {
         }
       }
 
+      const numRatio = Number(densityRatio.toFixed(3));
       result[edge.id] = {
         edgeId: edge.id,
         vehicleCount,
-        densityRatio: Number(densityRatio.toFixed(3)),
+        densityRatio: numRatio,
+        volumeToCapacityRatio: numRatio,
+        density: Number(density.toFixed(1)),
         averageSpeed: Number(
           (vehicleCount > 0 ? sumV / vehicleCount : edge.speedLimit).toFixed(2)
         ),
         queueLength: queueCount,
+        congestionLevel,
       };
     }
 

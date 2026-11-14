@@ -109,3 +109,113 @@ test('Metrics: Segment-level congestion data computes valid density and speed me
   assert.strictEqual(congestion['e1'].densityRatio <= 1.0, true);
   assert.strictEqual(congestion['e1'].averageSpeed >= 0.0, true);
 });
+
+test('Metrics: Zero vehicles state avoids NaN and defaults to clean free-flow values', () => {
+  const graph = createTestCorridor();
+  const odMatrix = new ODMatrix(); // No traffic demand
+
+  const sim = new NetworkSimulation({
+    graph,
+    config: { seed: 1, timeStep: 0.1 },
+    odMatrix,
+  });
+
+  sim.step(10); // 1 second with 0 vehicles
+
+  const metrics = sim.getComprehensiveMetrics();
+
+  // Zero vehicles: average speed and wait time must be strictly 0, never NaN
+  assert.strictEqual(metrics.activeVehiclesCount, 0);
+  assert.strictEqual(metrics.averageSpeed, 0);
+  assert.strictEqual(metrics.avgSpeed, 0);
+  assert.strictEqual(isNaN(metrics.averageSpeed), false);
+  assert.strictEqual(metrics.averageWaitTime, 0);
+  assert.strictEqual(metrics.avgWaitTime, 0);
+  assert.strictEqual(isNaN(metrics.averageWaitTime), false);
+  assert.strictEqual(metrics.throughputPerHour, 0);
+
+  // All roads must be FREE_FLOW with 0 density ratio
+  const congestion = metrics.roadCongestion;
+  for (const edgeId of ['e1', 'e2']) {
+    const seg = congestion[edgeId];
+    assert.strictEqual(seg.vehicleCount, 0);
+    assert.strictEqual(seg.densityRatio, 0);
+    assert.strictEqual(seg.volumeToCapacityRatio, 0);
+    assert.strictEqual(seg.density, 0);
+    assert.strictEqual(seg.congestionLevel, 'FREE_FLOW');
+  }
+});
+
+test('Metrics: Field name aliases match standard properties for client compatibility', () => {
+  const graph = createTestCorridor();
+  const odMatrix = new ODMatrix();
+  odMatrix.setFlow('N1', 'N3', 600);
+
+  const sim = new NetworkSimulation({
+    graph,
+    config: { seed: 99, timeStep: 0.1 },
+    odMatrix,
+  });
+
+  sim.step(300); // 30 seconds
+
+  const metrics = sim.getComprehensiveMetrics();
+
+  assert.strictEqual(metrics.activeVehicleCount, metrics.activeVehiclesCount);
+  assert.strictEqual(metrics.totalCompleted, metrics.completedVehiclesCount);
+  assert.strictEqual(metrics.totalGenerated, metrics.totalSpawned);
+  assert.strictEqual(metrics.avgSpeed, metrics.averageSpeed);
+  assert.strictEqual(metrics.avgWaitTime, metrics.averageWaitTime);
+  assert.strictEqual(metrics.avgTravelTime, metrics.averageTravelTime);
+  assert.strictEqual(metrics.currentTime, metrics.simulationTime);
+
+  // Check road congestion aliases
+  for (const seg of Object.values(metrics.roadCongestion)) {
+    assert.strictEqual(seg.volumeToCapacityRatio, seg.densityRatio);
+    assert.strictEqual(typeof seg.density, 'number');
+    assert.strictEqual(['FREE_FLOW', 'MODERATE', 'HEAVY', 'CONGESTED'].includes(seg.congestionLevel), true);
+  }
+});
+
+test('Metrics: Default 4-Way map 120-second run strictly conserves vehicles and tracks throughput', () => {
+  const defaultMap = {
+    nodes: [
+      { id: 'node_center', x: 200, y: 200, controlType: 'fixed_signal', incomingEdgeIds: [], outgoingEdgeIds: [] },
+      { id: 'node_west', x: 50, y: 200, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] },
+      { id: 'node_south', x: 200, y: 350, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] },
+      { id: 'node_east', x: 350, y: 200, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] },
+      { id: 'node_north', x: 200, y: 50, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] },
+    ],
+    edges: [
+      { id: 'road_W_C', fromNodeId: 'node_west', toNodeId: 'node_center', length: 150, speedLimit: 13.89, lanes: 2, isOneWay: true },
+      { id: 'road_S_C', fromNodeId: 'node_south', toNodeId: 'node_center', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+      { id: 'road_C_E', fromNodeId: 'node_center', toNodeId: 'node_east', length: 150, speedLimit: 13.89, lanes: 2, isOneWay: true },
+      { id: 'road_C_N', fromNodeId: 'node_center', toNodeId: 'node_north', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+    ],
+  };
+
+  const graph = RoadGraph.fromJSON(defaultMap as any);
+  const odMatrix = new ODMatrix();
+  odMatrix.setFlow('node_west', 'node_east', 600);
+  odMatrix.setFlow('node_west', 'node_north', 600);
+  odMatrix.setFlow('node_south', 'node_east', 600);
+  odMatrix.setFlow('node_south', 'node_north', 600);
+
+  const sim = new NetworkSimulation({
+    graph,
+    config: { seed: 42, timeStep: 0.1 },
+    odMatrix,
+  });
+
+  // Run 120 seconds (1200 ticks)
+  sim.step(1200);
+
+  const metrics = sim.getComprehensiveMetrics();
+
+  // Strict conservation: Spawned = Active + Completed
+  assert.strictEqual(metrics.totalSpawned, metrics.activeVehiclesCount + metrics.completedVehiclesCount);
+  assert.strictEqual(metrics.completedVehiclesCount > 0, true);
+  assert.strictEqual(metrics.throughputPerHour > 0, true);
+  assert.strictEqual(metrics.averageSpeed > 0, true);
+  assert.strictEqual(metrics.averageSpeed <= 13.89, true);
+});

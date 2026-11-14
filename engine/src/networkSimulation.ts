@@ -111,7 +111,7 @@ export class NetworkSimulation {
   private initSignalControllers(): void {
     for (const node of this.graph.getAllNodes()) {
       if (node.controlType === 'fixed_signal' || node.controlType === 'adaptive_signal') {
-        const controller = SignalControllerFactory.create(node);
+        const controller = SignalControllerFactory.create(node, this.graph);
         if (controller) {
           this.signalControllers.set(node.id, controller);
         }

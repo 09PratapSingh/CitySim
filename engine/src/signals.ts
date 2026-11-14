@@ -28,6 +28,7 @@ import type {
   SignalConfig,
   IntersectionNode,
 } from './types.ts';
+import type { RoadGraph } from './graph.ts';
 
 export abstract class TrafficSignalController {
   public readonly nodeId: string;
@@ -267,18 +268,157 @@ export class AdaptiveSignalController extends TrafficSignalController {
  * Factory for creating signal controllers from node configurations.
  */
 export class SignalControllerFactory {
-  public static create(node: IntersectionNode): TrafficSignalController | null {
-    if (node.controlType === 'unsignalized' || !node.signalConfig) {
+  public static create(node: IntersectionNode, graph?: RoadGraph): TrafficSignalController | null {
+    if (node.controlType === 'unsignalized') {
       return null;
     }
 
-    const { type, phases, adaptiveParams } = node.signalConfig;
+    let phases = node.signalConfig?.phases;
+
+    // Auto-generate standard non-conflicting phases if not explicitly provided
+    if (!phases || phases.length === 0) {
+      phases = this.autoGeneratePhases(node, graph);
+    }
+
+    if (!phases || phases.length === 0) {
+      return null;
+    }
+
+    const type = node.signalConfig?.type ?? node.controlType;
 
     if (type === 'adaptive_signal') {
+      const adaptiveParams: AdaptiveSignalParams = node.signalConfig?.adaptiveParams ?? {
+        minGreen: 10.0,
+        maxGreen: 40.0,
+        extensionSeconds: 3.0,
+        queueThreshold: 1,
+      };
       return new AdaptiveSignalController(node.id, phases, adaptiveParams);
     } else {
       return new FixedTimeSignalController(node.id, phases);
     }
+  }
+
+  /**
+   * Auto-generates standard 2-phase signal configurations from incoming approach edges.
+   */
+  public static autoGeneratePhases(node: IntersectionNode, graph?: RoadGraph): SignalPhase[] {
+    let incomingEdgeIds: string[] = [];
+
+    if (graph) {
+      incomingEdgeIds = graph.getIncomingEdges(node.id).map((e) => e.id);
+    } else if (Array.isArray(node.incomingEdgeIds) && node.incomingEdgeIds.length > 0) {
+      incomingEdgeIds = [...node.incomingEdgeIds];
+    }
+
+    if (incomingEdgeIds.length === 0) {
+      return [];
+    }
+
+    if (incomingEdgeIds.length === 1) {
+      return [
+        {
+          id: `${node.id}_phase_1`,
+          name: 'Main Approach',
+          greenEdgeIds: [incomingEdgeIds[0]],
+          greenDuration: 25.0,
+          yellowDuration: 3.0,
+          allRedDuration: 1.5,
+        },
+      ];
+    }
+
+    if (incomingEdgeIds.length === 2) {
+      // Alternating 2-phase signal
+      return [
+        {
+          id: `${node.id}_phase_1`,
+          name: 'Approach 1',
+          greenEdgeIds: [incomingEdgeIds[0]],
+          greenDuration: 25.0,
+          yellowDuration: 3.0,
+          allRedDuration: 1.5,
+        },
+        {
+          id: `${node.id}_phase_2`,
+          name: 'Approach 2',
+          greenEdgeIds: [incomingEdgeIds[1]],
+          greenDuration: 25.0,
+          yellowDuration: 3.0,
+          allRedDuration: 1.5,
+        },
+      ];
+    }
+
+    // 3 or more incoming edges: group by axis (East-West vs North-South)
+    const ewEdges: string[] = [];
+    const nsEdges: string[] = [];
+
+    for (const edgeId of incomingEdgeIds) {
+      const edge = graph?.getEdge(edgeId);
+      if (edge && graph) {
+        const fromNode = graph.getNode(edge.fromNodeId);
+        if (fromNode) {
+          const dx = Math.abs(node.x - fromNode.x);
+          const dy = Math.abs(node.y - fromNode.y);
+          if (dx >= dy) {
+            ewEdges.push(edgeId);
+          } else {
+            nsEdges.push(edgeId);
+          }
+          continue;
+        }
+      }
+      // Fallback: alternate
+      if (ewEdges.length <= nsEdges.length) {
+        ewEdges.push(edgeId);
+      } else {
+        nsEdges.push(edgeId);
+      }
+    }
+
+    // If all fell into one group, split evenly
+    if (ewEdges.length === 0 || nsEdges.length === 0) {
+      const all = [...ewEdges, ...nsEdges];
+      const mid = Math.ceil(all.length / 2);
+      return [
+        {
+          id: `${node.id}_phase_1`,
+          name: 'Phase 1',
+          greenEdgeIds: all.slice(0, mid),
+          greenDuration: 25.0,
+          yellowDuration: 3.0,
+          allRedDuration: 1.5,
+        },
+        {
+          id: `${node.id}_phase_2`,
+          name: 'Phase 2',
+          greenEdgeIds: all.slice(mid),
+          greenDuration: 25.0,
+          yellowDuration: 3.0,
+          allRedDuration: 1.5,
+        },
+      ];
+    }
+
+    return [
+      {
+        id: `${node.id}_phase_EW`,
+        name: 'East-West Movement',
+        greenEdgeIds: ewEdges,
+        greenDuration: 25.0,
+        yellowDuration: 3.0,
+        allRedDuration: 1.5,
+      },
+      {
+        id: `${node.id}_phase_NS`,
+        name: 'North-South Movement',
+        greenEdgeIds: nsEdges,
+        greenDuration: 25.0,
+        yellowDuration: 3.0,
+        allRedDuration: 1.5,
+      },
+    ];
   }
 
   /**

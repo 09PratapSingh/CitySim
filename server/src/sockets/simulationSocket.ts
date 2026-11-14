@@ -212,7 +212,7 @@ export function setupSimulationSockets(io: SocketIOServer): void {
     // Interpolate 2D vehicle positions along road segments
     const renderedVehicles = activeVehicles.map((v) => {
       const edge = graph.getEdge(v.currentEdgeId);
-      const coords = calculateVehicle2DCoordinates(v, edge);
+      const coords = calculateVehicle2DCoordinates(v, edge, graph);
       return {
         id: v.id,
         edgeId: v.currentEdgeId,
@@ -241,24 +241,45 @@ export function setupSimulationSockets(io: SocketIOServer): void {
 
   function calculateVehicle2DCoordinates(
     vehicle: Vehicle,
-    edge?: RoadSegment
+    edge?: RoadSegment,
+    graph?: RoadGraph
   ): { x: number; y: number; angle: number } {
-    if (!edge || !edge.startCoord || !edge.endCoord) {
+    if (!edge) return { x: 0, y: 0, angle: 0 };
+
+    let startX = edge.startCoord?.x;
+    let startY = edge.startCoord?.y;
+    let endX = edge.endCoord?.x;
+    let endY = edge.endCoord?.y;
+
+    if (startX === undefined || endX === undefined || startY === undefined || endY === undefined) {
+      if (graph) {
+        const fromN = graph.getNode(edge.fromNodeId);
+        const toN = graph.getNode(edge.toNodeId);
+        if (fromN && toN) {
+          startX = fromN.x;
+          startY = fromN.y;
+          endX = toN.x;
+          endY = toN.y;
+        }
+      }
+    }
+
+    if (startX === undefined || endX === undefined || startY === undefined || endY === undefined) {
       return { x: 0, y: 0, angle: 0 };
     }
 
-    const { startCoord, endCoord, length } = edge;
-    const fraction = length > 0 ? Math.min(1.0, vehicle.position / length) : 0;
+    const length = edge.length > 0 ? edge.length : Math.max(1, Math.hypot(endX - startX, endY - startY));
+    const fraction = Math.min(1.0, Math.max(0, vehicle.position / length));
 
     // Linear interpolation
-    const baseX = startCoord.x + fraction * (endCoord.x - startCoord.x);
-    const baseY = startCoord.y + fraction * (endCoord.y - startCoord.y);
+    const baseX = startX + fraction * (endX - startX);
+    const baseY = startY + fraction * (endY - startY);
 
-    const dx = endCoord.x - startCoord.x;
-    const dy = endCoord.y - startCoord.y;
+    const dx = endX - startX;
+    const dy = endY - startY;
     const angle = Math.atan2(dy, dx);
 
-    // Multi-lane lateral offset: 3.5m standard lane width
+    // Multi-lane lateral offset: 4.0m standard lane width
     const laneWidth = 4.0;
     const lateralOffset = (vehicle.laneIndex - (edge.lanes - 1) / 2) * laneWidth;
     const offsetX = -Math.sin(angle) * lateralOffset;

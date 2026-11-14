@@ -111,7 +111,22 @@ export const MapManagerModal: React.FC<MapManagerModalProps> = ({
         name: '4-Way Signalized Crossroad',
         description: 'Single central intersection with 4 approach arms.',
         nodes: [
-          { id: 'node_center', x: 400, y: 300, controlType: 'fixed_signal', incomingEdgeIds: ['road_W_C', 'road_S_C'], outgoingEdgeIds: ['road_C_E', 'road_C_N'] },
+          {
+            id: 'node_center',
+            x: 400,
+            y: 300,
+            controlType: 'fixed_signal',
+            incomingEdgeIds: ['road_W_C', 'road_S_C'],
+            outgoingEdgeIds: ['road_C_E', 'road_C_N'],
+            signalConfig: {
+              type: 'fixed_signal',
+              cycleTime: 59,
+              phases: [
+                { id: 'phase_EW', name: 'East-West Movement', greenEdgeIds: ['road_W_C'], greenDuration: 25, yellowDuration: 3, allRedDuration: 1.5 },
+                { id: 'phase_NS', name: 'North-South Movement', greenEdgeIds: ['road_S_C'], greenDuration: 25, yellowDuration: 3, allRedDuration: 1.5 },
+              ],
+            },
+          },
           { id: 'node_west', x: 150, y: 300, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] },
           { id: 'node_south', x: 400, y: 550, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] },
           { id: 'node_east', x: 650, y: 300, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] },

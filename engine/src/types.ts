@@ -226,35 +226,47 @@ export interface TimeSeriesSnapshot {
   currentThroughputRate: number;
 }
 
+export type CongestionLevel = 'FREE_FLOW' | 'MODERATE' | 'HEAVY' | 'CONGESTED';
+
 export interface SegmentCongestionData {
   edgeId: string;
   vehicleCount: number;
   densityRatio: number; // 0.0 to 1.0 (Volume-to-Capacity ratio proxy)
+  volumeToCapacityRatio: number; // alias for densityRatio
+  density: number; // vehicles / km / lane
   averageSpeed: number;
   queueLength: number;
+  congestionLevel: CongestionLevel;
 }
 
 export interface SimulationMetrics {
   /** Elapsed simulation time in seconds */
   simulationTime: number;
+  currentTime?: number;
 
   /** Number of vehicles currently driving on the network */
   activeVehiclesCount: number;
+  activeVehicleCount?: number;
 
   /** Number of vehicles that reached their destination */
   completedVehiclesCount: number;
+  totalCompleted?: number;
 
   /** Total vehicles spawned since start */
   totalSpawned: number;
+  totalGenerated?: number;
 
   /** Current mean velocity of all active vehicles (m/s) */
   averageSpeed: number;
+  avgSpeed?: number;
 
   /** Mean waiting time (delay) per completed vehicle (seconds) */
   averageWaitTime: number;
+  avgWaitTime?: number;
 
   /** Mean travel time per completed vehicle (seconds) */
   averageTravelTime: number;
+  avgTravelTime?: number;
 
   /** Maximum queue length observed across all approaches (in vehicles) */
   maxQueueLength: number;

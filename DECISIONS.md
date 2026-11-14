@@ -322,8 +322,37 @@ This document records the critical architectural, algorithmic, and engineering d
   1. Base asphalt pavement sized proportional to lane count ($\text{width} = \text{lanes} \times 4\text{m} \times \text{zoom}$).
   2. White dashed longitudinal lane dividers.
   3. Dynamic one-way flow chevrons along the road centerline.
-  4. Real-time congestion shading: Free Flow ($V/C < 0.5$, teal), Moderate ($0.5 \le V/C < 0.75$, amber), Heavy ($0.75 \le V/C < 0.9$, orange), and Congested ($V/C \ge 0.9$, rose-red).
+  4. Real-time congestion shading: Free Flow ($V/C < 0.3$, teal), Moderate ($0.3 \le V/C < 0.6$, amber), Heavy ($0.6 \le V/C < 0.85$, orange), and Congested ($V/C \ge 0.85$, rose-red).
   5. Road closure hazard stripes with a prominent "CLOSED" warning marker for scenario testing.
 - **Alternatives Rejected:**
   - *Simple 1-pixel line graphs:* Fails to convey lane capacity, multi-lane overtaking, or intersection physical footprint.
 - **Viva Defense Note:** Provides an immediate, aesthetically compelling representation of traffic conditions that non-technical stakeholders and examiners can instantly comprehend.
+
+---
+
+## ADR 026: Normalized Metric Serialization & Real-Density Congestion Classification
+
+- **Status:** Accepted (Stage 6 Patch)
+- **Context:** The frontend telemetry HUD and canvas heatmap require real-time metrics over WebSockets. Field name discrepancies between engine interfaces (`activeVehiclesCount`, `completedVehiclesCount`, `densityRatio`) and frontend components resulted in `undefined` field evaluations, causing `NaN` speed calculations, zero active vehicle counts, and fallback to `CONGESTED` red heatmaps on empty roads.
+- **Decision:**
+  1. Normalize metrics across engine, server, and client types to provide both standard properties and backward-compatible aliases (`activeVehiclesCount` / `activeVehicleCount`, `completedVehiclesCount` / `totalCompleted`, `totalSpawned` / `totalGenerated`, `averageSpeed` / `avgSpeed`, `averageWaitTime` / `avgWaitTime`).
+  2. Guard against division by zero in speed and wait calculations ($v_{\text{avg}} = 0.0$ when $N = 0$).
+  3. Formulate congestion levels strictly from physical vehicle storage density ($k / k_{\text{jam}}$): roads with zero vehicles remain clean slate asphalt, $V/C < 0.3$ classifies as Free Flow, and red congestion is reserved strictly for high density ($V/C \ge 0.85$).
+  4. Ensure strict conservation is visible on UI: $\text{Spawned} = \text{Active} + \text{Completed}$.
+- **Alternatives Rejected:**
+  - *Ad-hoc frontend type coercions:* Masks structural schema differences and leads to regression in later report generators.
+- **Viva Defense Note:** Demonstrates robust interface contract design, API defensive validation, and strict preservation of traffic flow conservation laws across backend and frontend boundaries.
+
+---
+
+## ADR 027: Automatic Phase Synthesis for Unconfigured Signalized Nodes & Active Delay Inclusion
+
+- **Status:** Accepted (Stage 6 Patch)
+- **Context:** In arbitrary or user-drawn road graphs where an intersection node is set to `fixed_signal` or `adaptive_signal` without explicitly declaring a detailed `signalConfig` phase array, `SignalControllerFactory.create()` previously returned `null`. This left signalized junctions without active controllers, causing approaches to default to permanent `GREEN`. Consequently, signals never cycled, vehicles never stopped, cross-traffic caused collision-free box conflicts, and stopped delay remained `0.0s`.
+- **Decision:**
+  1. Implement automatic topological phase synthesis in `SignalControllerFactory.autoGeneratePhases(node, graph)`: inspects incoming approach edges, classifies approaches by geometric axis (East-West vs. North-South), and synthesizes alternating non-conflicting signal phases ($25\text{s}$ green, $3\text{s}$ amber, $1.5\text{s}$ all-red clearance).
+  2. Compute network stopped delay and travel time across both completed trips and active vehicles currently queued on the network ($W = \frac{\sum W_{\text{completed}} + \sum W_{\text{active}}}{N_{\text{completed}} + N_{\text{active}}}$), ensuring delay is reported in real-time as soon as cars queue at red lights.
+  3. Render crisp roadside signal head boxes with glowing aspect bulbs and solid white stop lines across approach lanes on the canvas viewport.
+- **Alternatives Rejected:**
+  - *Silently ignoring unconfigured signal nodes:* Led to the reported bug where nodes visually appeared signalized on UI but had no controller in the engine.
+- **Viva Defense Note:** Demonstrates self-healing infrastructure modeling: arbitrary road layouts drafted by urban planners immediately gain realistic, non-conflicting traffic signal controllers without requiring manual phase timing entry.

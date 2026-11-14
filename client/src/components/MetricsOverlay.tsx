@@ -30,13 +30,22 @@ export const MetricsOverlay: React.FC<MetricsOverlayProps> = ({ metrics, isRunni
       return { text: 'FREE FLOW', color: 'bg-emerald-950/60 text-emerald-400 border-emerald-800' };
     }
 
-    const avgVC = roadEntries.reduce((sum, r) => sum + r.volumeToCapacityRatio, 0) / roadEntries.length;
+    // Extract valid density / VC ratios
+    const validRatios = roadEntries
+      .map((r) => r.volumeToCapacityRatio ?? r.densityRatio ?? 0)
+      .filter((v) => typeof v === 'number' && !isNaN(v));
 
-    if (avgVC < 0.5) {
+    if (validRatios.length === 0) {
       return { text: 'FREE FLOW', color: 'bg-emerald-950/60 text-emerald-400 border-emerald-800' };
-    } else if (avgVC < 0.75) {
+    }
+
+    const avgVC = validRatios.reduce((sum, v) => sum + v, 0) / validRatios.length;
+
+    if (avgVC < 0.3) {
+      return { text: 'FREE FLOW', color: 'bg-emerald-950/60 text-emerald-400 border-emerald-800' };
+    } else if (avgVC < 0.6) {
       return { text: 'MODERATE', color: 'bg-cyan-950/60 text-cyan-400 border-cyan-800' };
-    } else if (avgVC < 0.9) {
+    } else if (avgVC < 0.85) {
       return { text: 'HEAVY', color: 'bg-amber-950/60 text-amber-400 border-amber-800' };
     } else {
       return { text: 'CONGESTED', color: 'bg-rose-950/60 text-rose-400 border-rose-800' };
@@ -44,7 +53,15 @@ export const MetricsOverlay: React.FC<MetricsOverlayProps> = ({ metrics, isRunni
   };
 
   const badge = getCongestionBadge();
-  const speedKmH = metrics ? (metrics.avgSpeed * 3.6).toFixed(1) : '0.0';
+  const rawSpeed = metrics?.avgSpeed ?? metrics?.averageSpeed ?? 0;
+  const speedKmH = isNaN(rawSpeed) ? '0.0' : (rawSpeed * 3.6).toFixed(1);
+
+  const activeCount = metrics?.activeVehiclesCount ?? metrics?.activeVehicleCount ?? 0;
+  const completedCount = metrics?.completedVehiclesCount ?? metrics?.totalCompleted ?? 0;
+  const spawnedCount = metrics?.totalSpawned ?? metrics?.totalGenerated ?? (activeCount + completedCount);
+  const throughputVal = metrics?.throughputPerHour ?? 0;
+  const rawWait = metrics?.avgWaitTime ?? metrics?.averageWaitTime ?? 0;
+  const waitSec = isNaN(rawWait) ? '0.0' : rawWait.toFixed(1);
 
   return (
     <div className="absolute right-4 top-18 z-20 w-72 bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl shadow-2xl overflow-hidden select-none">
@@ -78,7 +95,7 @@ export const MetricsOverlay: React.FC<MetricsOverlayProps> = ({ metrics, isRunni
               <Car className="w-3 h-3 text-cyan-400" /> Active Vehicles
             </span>
             <span className="font-mono text-base font-bold text-slate-100 mt-1">
-              {metrics?.activeVehicleCount ?? 0}
+              {activeCount}
             </span>
           </div>
 
@@ -88,7 +105,7 @@ export const MetricsOverlay: React.FC<MetricsOverlayProps> = ({ metrics, isRunni
               <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Throughput
             </span>
             <span className="font-mono text-base font-bold text-emerald-400 mt-1">
-              {metrics ? Math.round(metrics.throughputPerHour) : 0} <span className="text-[10px] font-normal text-slate-400">veh/h</span>
+              {Math.round(throughputVal)} <span className="text-[10px] font-normal text-slate-400">veh/h</span>
             </span>
           </div>
 
@@ -98,7 +115,7 @@ export const MetricsOverlay: React.FC<MetricsOverlayProps> = ({ metrics, isRunni
               <Clock className="w-3 h-3 text-amber-400" /> Avg Wait Time
             </span>
             <span className="font-mono text-base font-bold text-amber-300 mt-1">
-              {metrics?.avgWaitTime ? metrics.avgWaitTime.toFixed(1) : '0.0'} <span className="text-[10px] font-normal text-slate-400">s</span>
+              {waitSec} <span className="text-[10px] font-normal text-slate-400">s</span>
             </span>
           </div>
 
@@ -112,10 +129,10 @@ export const MetricsOverlay: React.FC<MetricsOverlayProps> = ({ metrics, isRunni
             </span>
           </div>
 
-          {/* Total Trips Completed */}
+          {/* Total Trips Completed & Spawned (Strictly Conserved) */}
           <div className="col-span-2 bg-slate-950/40 border border-slate-800/60 px-2.5 py-1.5 rounded-lg flex items-center justify-between text-[11px] text-slate-400">
-            <span>Completed Trips: <strong className="text-slate-200 font-mono">{metrics?.totalCompleted ?? 0}</strong></span>
-            <span>Spawned: <strong className="text-slate-200 font-mono">{metrics?.totalGenerated ?? 0}</strong></span>
+            <span>Completed Trips: <strong className="text-slate-200 font-mono">{completedCount}</strong></span>
+            <span>Spawned: <strong className="text-slate-200 font-mono">{spawnedCount}</strong></span>
           </div>
         </div>
       )}

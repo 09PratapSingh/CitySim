@@ -10,6 +10,7 @@ const MapSchema = new Schema<IMapDocument>(
     description: { type: String, default: '' },
     nodes: { type: [Schema.Types.Mixed], default: [] },
     edges: { type: [Schema.Types.Mixed], default: [] },
+    odPairs: { type: [Schema.Types.Mixed], default: [] },
   },
   {
     timestamps: true,

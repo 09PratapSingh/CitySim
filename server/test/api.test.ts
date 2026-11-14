@@ -156,12 +156,19 @@ test('API: Dual-Run Simulation Comparison POST /api/simulations/compare', async 
   assert.notStrictEqual(deltas, undefined);
   assert.strictEqual(typeof deltas.deltaAvgWaitTime, 'number');
   assert.strictEqual(typeof deltas.deltaAvgWaitTimeStdDev, 'number');
+  assert.strictEqual(typeof deltas.baselineMeanWaitTime, 'number');
+  assert.strictEqual(typeof deltas.scenarioMeanWaitTime, 'number');
+  assert.strictEqual(Array.isArray(deltas.deltaAvgWaitTimeCI), true);
+  assert.strictEqual(deltas.deltaAvgWaitTimeCI.length, 2);
+  assert.strictEqual(typeof deltas.isWaitTimeSignificant, 'boolean');
   assert.strictEqual(typeof deltas.deltaThroughput, 'number');
   assert.strictEqual(typeof deltas.deltaCompleted, 'number');
   assert.strictEqual(typeof deltas.warmupSeconds, 'number');
   assert.strictEqual(typeof deltas.replicationsCount, 'number');
   assert.strictEqual(Array.isArray(deltas.seedsUsed), true);
   assert.strictEqual(deltas.seedsUsed.length, deltas.replicationsCount);
+  assert.notStrictEqual(scenario.modifications, undefined);
+  assert.deepStrictEqual(scenario.modifications.closedEdgeIds, ['road_W_C']);
 
   // Multi-seed replications breakdown must be returned
   const { replications } = compareRes.body.data;
@@ -179,4 +186,49 @@ test('API: Dual-Run Simulation Comparison POST /api/simulations/compare', async 
   assert.strictEqual(typeof comparativeTimeSeries[0].scenarioSpeed, 'number');
   assert.strictEqual(typeof comparativeTimeSeries[0].baselineActiveVehicles, 'number');
   assert.strictEqual(typeof comparativeTimeSeries[0].scenarioActiveVehicles, 'number');
+});
+
+test('API: 3x3 Grid Map and Center Route Closure Detour Comparison', async () => {
+  // 1. Verify 3x3 Grid Map is seeded
+  const mapsRes = await request(app).get('/api/maps');
+  assert.strictEqual(mapsRes.status, 200);
+  const gridMap = mapsRes.body.data.find((m: any) => m.id === 'map_grid_3x3' || m.name === '3x3 City Block Grid');
+  assert.ok(gridMap, '3x3 Grid Map must be seeded in store');
+  assert.strictEqual(gridMap.nodes.length, 9, '3x3 Grid must have 9 nodes');
+  assert.strictEqual(gridMap.edges.length, 24, '3x3 Grid must have 24 directed edges');
+
+  const gridMapId = gridMap.id || gridMap._id;
+
+  // 2. Verify Scenarios for 3x3 Grid
+  const scenRes = await request(app).get(`/api/scenarios?baseMapId=${gridMapId}`);
+  assert.strictEqual(scenRes.status, 200);
+  const closureScen = scenRes.body.data.find((s: any) => s.id === 'scen_grid_closure' || s.name === 'Center Route Closure');
+  assert.ok(closureScen, 'Center Route Closure scenario must be seeded for 3x3 grid');
+  assert.deepStrictEqual(closureScen.modifications.closedEdgeIds, ['road_ML_C']);
+
+  // 3. Execute Dual-Run Comparison on 3x3 Grid with Center Route Closure
+  const compareRes = await request(app).post('/api/simulations/compare').send({
+    baseMapId: gridMapId,
+    scenarioId: closureScen.id || closureScen._id,
+    seed: 42,
+    durationSeconds: 60,
+    warmupSeconds: 10,
+    replications: 3,
+  });
+
+  assert.strictEqual(compareRes.status, 200);
+  assert.strictEqual(compareRes.body.success, true);
+  const { baseline, scenario, deltas } = compareRes.body.data;
+
+  assert.strictEqual(baseline.status, 'completed');
+  assert.strictEqual(scenario.status, 'completed');
+  assert.ok(baseline.aggregateMetrics.totalSpawned > 0, 'Baseline must spawn vehicles');
+  assert.ok(scenario.aggregateMetrics.totalSpawned > 0, 'Scenario must spawn vehicles');
+  assert.strictEqual(
+    scenario.aggregateMetrics.totalSpawned,
+    baseline.aggregateMetrics.totalSpawned,
+    'Detour scenario preserves origin demand without dropping vehicles'
+  );
+  assert.ok(scenario.aggregateMetrics.completedVehiclesCount > 0, 'Vehicles must successfully complete detour');
+  assert.strictEqual(deltas.replicationsCount, 3);
 });

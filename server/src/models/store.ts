@@ -58,6 +58,154 @@ function seedDefaultMap(): void {
       updatedAt: new Date(),
     });
   }
+
+  // Seed 3x3 Grid Map
+  const gridMapId = 'map_grid_3x3';
+  if (!memMaps.has(gridMapId)) {
+    memMaps.set(gridMapId, {
+      id: gridMapId,
+      name: '3x3 City Block Grid',
+      description: 'Urban 3x3 street grid (9 nodes, 24 directional links) with a signalized center intersection and perimeter bypasses for detour routing.',
+      nodes: [
+        // Row 1 (Top)
+        {
+          id: 'node_TL',
+          x: 200,
+          y: 150,
+          controlType: 'unsignalized',
+          incomingEdgeIds: ['road_TC_TL', 'road_ML_TL'],
+          outgoingEdgeIds: ['road_TL_TC', 'road_TL_ML'],
+        },
+        {
+          id: 'node_TC',
+          x: 400,
+          y: 150,
+          controlType: 'unsignalized',
+          incomingEdgeIds: ['road_TL_TC', 'road_TR_TC', 'road_C_TC'],
+          outgoingEdgeIds: ['road_TC_TL', 'road_TC_TR', 'road_TC_C'],
+        },
+        {
+          id: 'node_TR',
+          x: 600,
+          y: 150,
+          controlType: 'unsignalized',
+          incomingEdgeIds: ['road_TC_TR', 'road_MR_TR'],
+          outgoingEdgeIds: ['road_TR_TC', 'road_TR_MR'],
+        },
+        // Row 2 (Middle)
+        {
+          id: 'node_ML',
+          x: 200,
+          y: 300,
+          controlType: 'unsignalized',
+          incomingEdgeIds: ['road_TL_ML', 'road_BL_ML', 'road_C_ML'],
+          outgoingEdgeIds: ['road_ML_TL', 'road_ML_BL', 'road_ML_C'],
+        },
+        {
+          id: 'node_C',
+          x: 400,
+          y: 300,
+          controlType: 'fixed_signal',
+          incomingEdgeIds: ['road_ML_C', 'road_MR_C', 'road_TC_C', 'road_BC_C'],
+          outgoingEdgeIds: ['road_C_ML', 'road_C_MR', 'road_C_TC', 'road_C_BC'],
+          signalConfig: {
+            type: 'fixed_signal',
+            cycleTime: 59,
+            phases: [
+              {
+                id: 'phase_EW',
+                name: 'East-West Movement',
+                greenEdgeIds: ['road_ML_C', 'road_MR_C'],
+                greenDuration: 25,
+                yellowDuration: 3,
+                allRedDuration: 1.5,
+              },
+              {
+                id: 'phase_NS',
+                name: 'North-South Movement',
+                greenEdgeIds: ['road_TC_C', 'road_BC_C'],
+                greenDuration: 25,
+                yellowDuration: 3,
+                allRedDuration: 1.5,
+              },
+            ],
+          },
+        },
+        {
+          id: 'node_MR',
+          x: 600,
+          y: 300,
+          controlType: 'unsignalized',
+          incomingEdgeIds: ['road_TR_MR', 'road_BR_MR', 'road_C_MR'],
+          outgoingEdgeIds: ['road_MR_TR', 'road_MR_BR', 'road_MR_C'],
+        },
+        // Row 3 (Bottom)
+        {
+          id: 'node_BL',
+          x: 200,
+          y: 450,
+          controlType: 'unsignalized',
+          incomingEdgeIds: ['road_ML_BL', 'road_BC_BL'],
+          outgoingEdgeIds: ['road_BL_ML', 'road_BL_BC'],
+        },
+        {
+          id: 'node_BC',
+          x: 400,
+          y: 450,
+          controlType: 'unsignalized',
+          incomingEdgeIds: ['road_BL_BC', 'road_BR_BC', 'road_C_BC'],
+          outgoingEdgeIds: ['road_BC_BL', 'road_BC_BR', 'road_BC_C'],
+        },
+        {
+          id: 'node_BR',
+          x: 600,
+          y: 450,
+          controlType: 'unsignalized',
+          incomingEdgeIds: ['road_BC_BR', 'road_MR_BR'],
+          outgoingEdgeIds: ['road_BR_BC', 'road_BR_MR'],
+        },
+      ],
+      edges: [
+        // Horizontal links (12 directed edges)
+        { id: 'road_TL_TC', fromNodeId: 'node_TL', toNodeId: 'node_TC', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+        { id: 'road_TC_TL', fromNodeId: 'node_TC', toNodeId: 'node_TL', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+        { id: 'road_TC_TR', fromNodeId: 'node_TC', toNodeId: 'node_TR', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+        { id: 'road_TR_TC', fromNodeId: 'node_TR', toNodeId: 'node_TC', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+
+        { id: 'road_ML_C', fromNodeId: 'node_ML', toNodeId: 'node_C', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+        { id: 'road_C_ML', fromNodeId: 'node_C', toNodeId: 'node_ML', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+        { id: 'road_C_MR', fromNodeId: 'node_C', toNodeId: 'node_MR', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+        { id: 'road_MR_C', fromNodeId: 'node_MR', toNodeId: 'node_C', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+
+        { id: 'road_BL_BC', fromNodeId: 'node_BL', toNodeId: 'node_BC', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+        { id: 'road_BC_BL', fromNodeId: 'node_BC', toNodeId: 'node_BL', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+        { id: 'road_BC_BR', fromNodeId: 'node_BC', toNodeId: 'node_BR', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+        { id: 'road_BR_BC', fromNodeId: 'node_BR', toNodeId: 'node_BC', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+
+        // Vertical links (12 directed edges)
+        { id: 'road_TL_ML', fromNodeId: 'node_TL', toNodeId: 'node_ML', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+        { id: 'road_ML_TL', fromNodeId: 'node_ML', toNodeId: 'node_TL', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+        { id: 'road_ML_BL', fromNodeId: 'node_ML', toNodeId: 'node_BL', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+        { id: 'road_BL_ML', fromNodeId: 'node_BL', toNodeId: 'node_ML', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+
+        { id: 'road_TC_C', fromNodeId: 'node_TC', toNodeId: 'node_C', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+        { id: 'road_C_TC', fromNodeId: 'node_C', toNodeId: 'node_TC', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+        { id: 'road_C_BC', fromNodeId: 'node_C', toNodeId: 'node_BC', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+        { id: 'road_BC_C', fromNodeId: 'node_BC', toNodeId: 'node_C', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+
+        { id: 'road_TR_MR', fromNodeId: 'node_TR', toNodeId: 'node_MR', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+        { id: 'road_MR_TR', fromNodeId: 'node_MR', toNodeId: 'node_TR', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+        { id: 'road_MR_BR', fromNodeId: 'node_MR', toNodeId: 'node_BR', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+        { id: 'road_BR_MR', fromNodeId: 'node_BR', toNodeId: 'node_MR', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+      ],
+      odPairs: [
+        { originNodeId: 'node_ML', destinationNodeId: 'node_MR', arrivalRatePerHour: 800 },
+        { originNodeId: 'node_TC', destinationNodeId: 'node_BC', arrivalRatePerHour: 200 },
+      ],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
 }
 seedDefaultMap();
 
@@ -121,6 +269,55 @@ function seedDefaultScenarios(): void {
       updatedAt: new Date(),
     });
   }
+
+  // Seed 3x3 Grid Scenarios
+  const gridClosureScenarioId = 'scen_grid_closure';
+  if (!memScenarios.has(gridClosureScenarioId)) {
+    memScenarios.set(gridClosureScenarioId, {
+      id: gridClosureScenarioId,
+      baseMapId: 'map_grid_3x3',
+      name: 'Center Route Closure',
+      description: 'Simulates closure of road_ML_C between Mid-Left and Center, diverting westbound-eastbound corridor traffic along perimeter grid bypasses.',
+      seed: 42,
+      demandMultiplier: 1.0,
+      modifications: {
+        closedEdgeIds: ['road_ML_C'],
+        signalOverrides: [],
+        speedLimitOverrides: [],
+      },
+      odPairs: [
+        { originNodeId: 'node_ML', destinationNodeId: 'node_MR', arrivalRatePerHour: 800 },
+        { originNodeId: 'node_TC', destinationNodeId: 'node_BC', arrivalRatePerHour: 200 },
+      ],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
+
+  const gridAdaptiveScenarioId = 'scen_grid_adaptive';
+  if (!memScenarios.has(gridAdaptiveScenarioId)) {
+    memScenarios.set(gridAdaptiveScenarioId, {
+      id: gridAdaptiveScenarioId,
+      baseMapId: 'map_grid_3x3',
+      name: 'Center Adaptive Signal Upgrade',
+      description: 'Upgrades center intersection (node_C) to dynamic queue-responsive actuation.',
+      seed: 42,
+      demandMultiplier: 1.0,
+      modifications: {
+        closedEdgeIds: [],
+        signalOverrides: [
+          { nodeId: 'node_C', controlType: 'adaptive_signal' }
+        ],
+        speedLimitOverrides: [],
+      },
+      odPairs: [
+        { originNodeId: 'node_ML', destinationNodeId: 'node_MR', arrivalRatePerHour: 800 },
+        { originNodeId: 'node_TC', destinationNodeId: 'node_BC', arrivalRatePerHour: 200 },
+      ],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
 }
 seedDefaultScenarios();
 
@@ -128,7 +325,13 @@ export class DataStore {
   // --- MAPS ---
   public static async getMaps(): Promise<MapData[]> {
     if (isDBConnected()) {
-      const docs = await MapModel.find().sort({ createdAt: -1 });
+      let docs = await MapModel.find().sort({ createdAt: 1 });
+      if (docs.length === 0) {
+        for (const m of memMaps.values()) {
+          await MapModel.create(m);
+        }
+        docs = await MapModel.find().sort({ createdAt: 1 });
+      }
       return docs.map((d) => d.toJSON());
     }
     return Array.from(memMaps.values());
@@ -137,10 +340,14 @@ export class DataStore {
   public static async getMapById(id: string): Promise<MapData | null> {
     if (isDBConnected()) {
       try {
-        const doc = await MapModel.findById(id);
-        return doc ? doc.toJSON() : null;
+        let doc = await MapModel.findById(id);
+        if (!doc) {
+          doc = await MapModel.findOne({ id });
+        }
+        if (doc) return doc.toJSON();
+        return memMaps.get(id) ?? null;
       } catch {
-        return null;
+        return memMaps.get(id) ?? null;
       }
     }
     return memMaps.get(id) ?? null;
@@ -194,7 +401,16 @@ export class DataStore {
   public static async getScenarios(baseMapId?: string): Promise<ScenarioData[]> {
     if (isDBConnected()) {
       const query = baseMapId ? { baseMapId } : {};
-      const docs = await ScenarioModel.find(query).sort({ createdAt: -1 });
+      let docs = await ScenarioModel.find(query).sort({ createdAt: 1 });
+      if (docs.length === 0 && memScenarios.size > 0) {
+        for (const s of memScenarios.values()) {
+          const exists = await ScenarioModel.findOne({ name: s.name, baseMapId: s.baseMapId });
+          if (!exists) {
+            await ScenarioModel.create(s);
+          }
+        }
+        docs = await ScenarioModel.find(query).sort({ createdAt: 1 });
+      }
       return docs.map((d) => d.toJSON());
     }
     const list = Array.from(memScenarios.values());
@@ -207,10 +423,14 @@ export class DataStore {
   public static async getScenarioById(id: string): Promise<ScenarioData | null> {
     if (isDBConnected()) {
       try {
-        const doc = await ScenarioModel.findById(id);
-        return doc ? doc.toJSON() : null;
+        let doc = await ScenarioModel.findById(id);
+        if (!doc) {
+          doc = await ScenarioModel.findOne({ id });
+        }
+        if (doc) return doc.toJSON();
+        return memScenarios.get(id) ?? null;
       } catch {
-        return null;
+        return memScenarios.get(id) ?? null;
       }
     }
     return memScenarios.get(id) ?? null;

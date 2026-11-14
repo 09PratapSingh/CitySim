@@ -106,6 +106,10 @@ This checklist tracks the stage-wise progress of the **CitySim: Traffic Scenario
 ---
 
 ## Stage 8: Reports Export, Run History & Viva Documentation
+- ✅ 8.0 3x3 City Block Grid Network Generation (9 nodes, 24 directional links, fixed signal at center `node_C`).
+- ✅ 8.0b "Center Route Closure" scenario & explicit corridor OD demand matrix (`node_ML` to `node_MR`).
+- ✅ 8.0c Headless verification of A* alternate route pathfinding and 100% demand preservation (zero dropped trips).
+- ✅ 8.0d Database and In-Memory store persistence with UI Map and Scenario selectors.
 - ⬜ 8.1 Implement CSV Exporter for road-level and network-level metrics over time.
 - ⬜ 8.2 Implement PDF Report Generator (executive summary, scenario differences, metric charts, congestion tables).
 - ⬜ 8.3 Build Past Runs Browser (view, compare, or reopen historical simulation runs).

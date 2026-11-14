@@ -69,6 +69,8 @@ export const App: React.FC = () => {
   const [mapName, setMapName] = useState('Default 4-Way Intersection');
   const [nodes, setNodes] = useState<IntersectionNode[]>(DEFAULT_INITIAL_MAP.nodes);
   const [edges, setEdges] = useState<RoadSegment[]>(DEFAULT_INITIAL_MAP.edges);
+  const [mapOdPairs, setMapOdPairs] = useState<any[] | undefined>(undefined);
+  const [availableMaps, setAvailableMaps] = useState<MapData[]>([]);
   const [selection, setSelection] = useState<SelectedElement | null>(null);
 
   // Viewport Transform (Center initial 4-way intersection)
@@ -87,6 +89,7 @@ export const App: React.FC = () => {
     fetchMaps()
       .then((maps) => {
         if (maps && maps.length > 0) {
+          setAvailableMaps(maps);
           loadMap(maps[0]);
         }
       })
@@ -119,6 +122,7 @@ export const App: React.FC = () => {
     setMapName(data.name || 'Untitled Map');
     setNodes(data.nodes || []);
     setEdges(data.edges || []);
+    setMapOdPairs(data.odPairs);
     setSelection(null);
     setHasUnsavedChanges(false);
 
@@ -287,7 +291,11 @@ export const App: React.FC = () => {
       {/* Main Content Area */}
       {activeMode === 'comparison' ? (
         <ComparisonDashboard
-          baseMap={{ id: mapId || undefined, name: mapName, nodes, edges }}
+          baseMap={{ id: mapId || undefined, name: mapName, nodes, edges, odPairs: mapOdPairs }}
+          availableMaps={availableMaps}
+          onSelectMap={(targetMap) => {
+            loadMap(targetMap);
+          }}
           onOpenScenarioModal={() => setIsScenarioModalOpen(true)}
           stagedScenario={stagedScenario}
         />

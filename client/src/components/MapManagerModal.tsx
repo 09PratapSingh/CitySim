@@ -103,10 +103,76 @@ export const MapManagerModal: React.FC<MapManagerModalProps> = ({
   };
 
   // Preset Template Generators
-  const loadPreset = (presetType: '4way' | 'grid' | 'arterial') => {
+  const loadPreset = (presetType: '4way' | 'grid' | 'grid_3x3' | 'arterial') => {
     let preset: MapData;
 
-    if (presetType === '4way') {
+    if (presetType === 'grid_3x3') {
+      preset = {
+        name: '3x3 City Block Grid',
+        description: 'Urban 3x3 street grid (9 nodes, 24 directional links) with a signalized center intersection and perimeter bypasses for detour routing.',
+        nodes: [
+          { id: 'node_TL', x: 200, y: 150, controlType: 'unsignalized', incomingEdgeIds: ['road_TC_TL', 'road_ML_TL'], outgoingEdgeIds: ['road_TL_TC', 'road_TL_ML'] },
+          { id: 'node_TC', x: 400, y: 150, controlType: 'unsignalized', incomingEdgeIds: ['road_TL_TC', 'road_TR_TC', 'road_C_TC'], outgoingEdgeIds: ['road_TC_TL', 'road_TC_TR', 'road_TC_C'] },
+          { id: 'node_TR', x: 600, y: 150, controlType: 'unsignalized', incomingEdgeIds: ['road_TC_TR', 'road_MR_TR'], outgoingEdgeIds: ['road_TR_TC', 'road_TR_MR'] },
+          { id: 'node_ML', x: 200, y: 300, controlType: 'unsignalized', incomingEdgeIds: ['road_TL_ML', 'road_BL_ML', 'road_C_ML'], outgoingEdgeIds: ['road_ML_TL', 'road_ML_BL', 'road_ML_C'] },
+          {
+            id: 'node_C',
+            x: 400,
+            y: 300,
+            controlType: 'fixed_signal',
+            incomingEdgeIds: ['road_ML_C', 'road_MR_C', 'road_TC_C', 'road_BC_C'],
+            outgoingEdgeIds: ['road_C_ML', 'road_C_MR', 'road_C_TC', 'road_C_BC'],
+            signalConfig: {
+              type: 'fixed_signal',
+              cycleTime: 59,
+              phases: [
+                { id: 'phase_EW', name: 'East-West Movement', greenEdgeIds: ['road_ML_C', 'road_MR_C'], greenDuration: 25, yellowDuration: 3, allRedDuration: 1.5 },
+                { id: 'phase_NS', name: 'North-South Movement', greenEdgeIds: ['road_TC_C', 'road_BC_C'], greenDuration: 25, yellowDuration: 3, allRedDuration: 1.5 },
+              ],
+            },
+          },
+          { id: 'node_MR', x: 600, y: 300, controlType: 'unsignalized', incomingEdgeIds: ['road_TR_MR', 'road_BR_MR', 'road_C_MR'], outgoingEdgeIds: ['road_MR_TR', 'road_MR_BR', 'road_MR_C'] },
+          { id: 'node_BL', x: 200, y: 450, controlType: 'unsignalized', incomingEdgeIds: ['road_ML_BL', 'road_BC_BL'], outgoingEdgeIds: ['road_BL_ML', 'road_BL_BC'] },
+          { id: 'node_BC', x: 400, y: 450, controlType: 'unsignalized', incomingEdgeIds: ['road_BL_BC', 'road_BR_BC', 'road_C_BC'], outgoingEdgeIds: ['road_BC_BL', 'road_BC_BR', 'road_BC_C'] },
+          { id: 'node_BR', x: 600, y: 450, controlType: 'unsignalized', incomingEdgeIds: ['road_BC_BR', 'road_MR_BR'], outgoingEdgeIds: ['road_BR_BC', 'road_BR_MR'] },
+        ],
+        edges: [
+          { id: 'road_TL_TC', fromNodeId: 'node_TL', toNodeId: 'node_TC', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+          { id: 'road_TC_TL', fromNodeId: 'node_TC', toNodeId: 'node_TL', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+          { id: 'road_TC_TR', fromNodeId: 'node_TC', toNodeId: 'node_TR', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+          { id: 'road_TR_TC', fromNodeId: 'node_TR', toNodeId: 'node_TC', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+
+          { id: 'road_ML_C', fromNodeId: 'node_ML', toNodeId: 'node_C', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+          { id: 'road_C_ML', fromNodeId: 'node_C', toNodeId: 'node_ML', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+          { id: 'road_C_MR', fromNodeId: 'node_C', toNodeId: 'node_MR', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+          { id: 'road_MR_C', fromNodeId: 'node_MR', toNodeId: 'node_C', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+
+          { id: 'road_BL_BC', fromNodeId: 'node_BL', toNodeId: 'node_BC', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+          { id: 'road_BC_BL', fromNodeId: 'node_BC', toNodeId: 'node_BL', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+          { id: 'road_BC_BR', fromNodeId: 'node_BC', toNodeId: 'node_BR', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+          { id: 'road_BR_BC', fromNodeId: 'node_BR', toNodeId: 'node_BC', length: 200, speedLimit: 13.89, lanes: 1, isOneWay: true },
+
+          { id: 'road_TL_ML', fromNodeId: 'node_TL', toNodeId: 'node_ML', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+          { id: 'road_ML_TL', fromNodeId: 'node_ML', toNodeId: 'node_TL', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+          { id: 'road_ML_BL', fromNodeId: 'node_ML', toNodeId: 'node_BL', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+          { id: 'road_BL_ML', fromNodeId: 'node_BL', toNodeId: 'node_ML', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+
+          { id: 'road_TC_C', fromNodeId: 'node_TC', toNodeId: 'node_C', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+          { id: 'road_C_TC', fromNodeId: 'node_C', toNodeId: 'node_TC', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+          { id: 'road_C_BC', fromNodeId: 'node_C', toNodeId: 'node_BC', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+          { id: 'road_BC_C', fromNodeId: 'node_BC', toNodeId: 'node_C', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+
+          { id: 'road_TR_MR', fromNodeId: 'node_TR', toNodeId: 'node_MR', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+          { id: 'road_MR_TR', fromNodeId: 'node_MR', toNodeId: 'node_TR', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+          { id: 'road_MR_BR', fromNodeId: 'node_MR', toNodeId: 'node_BR', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+          { id: 'road_BR_MR', fromNodeId: 'node_BR', toNodeId: 'node_MR', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+        ],
+        odPairs: [
+          { originNodeId: 'node_ML', destinationNodeId: 'node_MR', arrivalRatePerHour: 800 },
+          { originNodeId: 'node_TC', destinationNodeId: 'node_BC', arrivalRatePerHour: 200 },
+        ],
+      };
+    } else if (presetType === '4way') {
       preset = {
         name: '4-Way Signalized Crossroad',
         description: 'Single central intersection with 4 approach arms.',
@@ -362,6 +428,13 @@ export const MapManagerModal: React.FC<MapManagerModalProps> = ({
           {activeTab === 'templates' && (
             <div className="grid grid-cols-1 gap-3">
               {[
+                {
+                  id: 'grid_3x3',
+                  title: '3x3 City Block Grid',
+                  desc: 'Urban 3x3 street grid (9 nodes, 24 directional links) with signalized center and detour bypasses.',
+                  nodes: '9 Nodes',
+                  edges: '24 Roads',
+                },
                 {
                   id: '4way',
                   title: '4-Way Signalized Crossroad',

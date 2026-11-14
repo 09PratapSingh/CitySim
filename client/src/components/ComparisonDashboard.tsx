@@ -37,7 +37,8 @@ import {
 } from 'recharts';
 import { 
   compareSimulations, 
-  fetchScenarios 
+  fetchScenarios,
+  fetchMaps
 } from '../api/client.ts';
 import type { 
   MapData, 
@@ -50,6 +51,8 @@ import type {
 
 interface ComparisonDashboardProps {
   baseMap: MapData;
+  availableMaps?: MapData[];
+  onSelectMap?: (map: MapData) => void;
   onOpenScenarioModal: () => void;
   stagedScenario?: ScenarioData | {
     baseMapId: string;
@@ -57,14 +60,18 @@ interface ComparisonDashboardProps {
     modifications: ScenarioModifications;
     demandMultiplier: number;
     seed: number;
+    odPairs?: any[];
   } | null;
 }
 
 export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
   baseMap,
+  availableMaps,
+  onSelectMap,
   onOpenScenarioModal,
   stagedScenario,
 }) => {
+  const [mapList, setMapList] = useState<MapData[]>(availableMaps || []);
   const [scenarios, setScenarios] = useState<ScenarioData[]>([]);
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>('custom_staged');
   const [seed, setSeed] = useState<number>(42);
@@ -82,6 +89,19 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
   // Canvases for visual road network schematic
   const baselineCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const scenarioCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Sync available maps
+  useEffect(() => {
+    if (availableMaps && availableMaps.length > 0) {
+      setMapList(availableMaps);
+    } else {
+      fetchMaps()
+        .then((maps) => {
+          if (maps && maps.length > 0) setMapList(maps);
+        })
+        .catch((err) => console.error('Failed to load maps list:', err));
+    }
+  }, [availableMaps]);
 
   // Load scenarios for current base map
   useEffect(() => {
@@ -106,46 +126,76 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
   // Quick Presets
   const runPreset = (type: 'closure' | 'adaptive' | 'rush') => {
     if (type === 'closure') {
-      const targetEdge = baseMap.edges[0]?.id || 'road_W_C';
-      executeComparison({
-        baseMapId,
-        scenarioName: 'West Approach Road Closure',
-        demandMultiplier: 1.0,
-        seed,
-        modifications: {
-          closedEdgeIds: [targetEdge],
-          signalOverrides: [],
-          speedLimitOverrides: [],
-        },
-      });
+      const matchScen = scenarios.find((s) => s.modifications?.closedEdgeIds?.length > 0 || (s.id || s._id) === 'scen_default_closure');
+      if (matchScen) {
+        setSelectedScenarioId(matchScen.id || matchScen._id || 'scen_default_closure');
+        executeComparison(matchScen);
+      } else {
+        const targetEdge = baseMap.edges[0]?.id || 'road_W_C';
+        executeComparison({
+          baseMapId,
+          scenarioName: 'West Approach Road Closure',
+          demandMultiplier: 1.0,
+          seed,
+          modifications: {
+            closedEdgeIds: [targetEdge],
+            signalOverrides: [],
+            speedLimitOverrides: [],
+          },
+        });
+      }
     } else if (type === 'adaptive') {
-      const sigMap = baseMap.nodes
-        .filter((n) => n.controlType !== 'unsignalized')
-        .map((n) => ({ nodeId: n.id, controlType: 'adaptive_signal' as const }));
+      const matchScen = scenarios.find((s) => s.modifications?.signalOverrides?.some((sig: any) => sig.controlType === 'adaptive_signal') || (s.id || s._id) === 'scen_default_adaptive');
+      if (matchScen) {
+        setSelectedScenarioId(matchScen.id || matchScen._id || 'scen_default_adaptive');
+        executeComparison(matchScen);
+      } else {
+        const sigMap = baseMap.nodes
+          .filter((n) => n.controlType !== 'unsignalized')
+          .map((n) => ({ nodeId: n.id, controlType: 'adaptive_signal' as const }));
 
-      executeComparison({
-        baseMapId,
-        scenarioName: 'Smart Adaptive Signal Upgrade',
-        demandMultiplier: 1.0, // Same demand as baseline for isolated signal comparison
-        seed,
-        modifications: {
-          closedEdgeIds: [],
-          signalOverrides: sigMap,
-          speedLimitOverrides: [],
-        },
-      });
+        executeComparison({
+          baseMapId,
+          scenarioName: 'Smart Adaptive Signal Upgrade',
+          demandMultiplier: 1.0, // Same demand as baseline for isolated signal comparison
+          seed,
+          modifications: {
+            closedEdgeIds: [],
+            signalOverrides: sigMap,
+            speedLimitOverrides: [],
+          },
+        });
+      }
     } else if (type === 'rush') {
-      executeComparison({
-        baseMapId,
-        scenarioName: 'Peak Rush Hour Demand (1.8x)',
-        demandMultiplier: 1.8,
-        seed,
-        modifications: {
-          closedEdgeIds: [],
-          signalOverrides: [],
-          speedLimitOverrides: [],
-        },
-      });
+      const matchScen = scenarios.find((s) => s.demandMultiplier > 1 || (s.id || s._id) === 'scen_default_rushhour');
+      if (matchScen) {
+        setSelectedScenarioId(matchScen.id || matchScen._id || 'scen_default_rushhour');
+        executeComparison(matchScen);
+      } else {
+        executeComparison({
+          baseMapId,
+          scenarioName: 'Peak Rush Hour Demand (1.8x)',
+          demandMultiplier: 1.8,
+          seed,
+          modifications: {
+            closedEdgeIds: [],
+            signalOverrides: [],
+            speedLimitOverrides: [],
+          },
+        });
+      }
+    }
+  };
+
+  const handleSelectScenario = (newId: string) => {
+    setSelectedScenarioId(newId);
+    if (newId === 'custom_staged' && stagedScenario) {
+      executeComparison(stagedScenario);
+    } else {
+      const scen = scenarios.find((s) => (s.id || s._id) === newId);
+      if (scen) {
+        executeComparison(scen);
+      }
     }
   };
 
@@ -177,10 +227,16 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
         params.scenarioId = scenarioTarget.id || scenarioTarget._id;
         params.scenarioName = scenarioTarget.name;
         params.demandMultiplier = scenarioTarget.demandMultiplier ?? 1.0;
+        if (scenarioTarget.odPairs) {
+          params.odPairs = scenarioTarget.odPairs;
+        }
       } else {
         params.scenarioName = scenarioTarget.scenarioName || 'Custom Staged Scenario';
         params.demandMultiplier = scenarioTarget.demandMultiplier ?? 1.0;
         params.modifications = scenarioTarget.modifications;
+        if (scenarioTarget.odPairs) {
+          params.odPairs = scenarioTarget.odPairs;
+        }
       }
 
       const result = await compareSimulations(params);
@@ -236,8 +292,17 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
     const transformX = (x: number) => padding + (x - minX) * scale;
     const transformY = (y: number) => padding + (y - minY) * scale;
 
+    // Sort edges so open edges are drawn first and closed edges are drawn on top
+    const sortedEdges = [...map.edges].sort((a, b) => {
+      const aClosed = isScenario && (a.isClosed || closedEdgeIds.includes(a.id));
+      const bClosed = isScenario && (b.isClosed || closedEdgeIds.includes(b.id));
+      if (aClosed && !bClosed) return 1;
+      if (!aClosed && bClosed) return -1;
+      return 0;
+    });
+
     // Draw Edges
-    map.edges.forEach((edge) => {
+    sortedEdges.forEach((edge) => {
       const fromNode = map.nodes.find((n) => n.id === edge.fromNodeId);
       const toNode = map.nodes.find((n) => n.id === edge.toNodeId);
       if (!fromNode || !toNode) return;
@@ -246,6 +311,24 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
       const y1 = transformY(fromNode.y);
       const x2 = transformX(toNode.x);
       const y2 = transformY(toNode.y);
+
+      // Check if reverse edge exists for lateral separation of opposing lanes
+      const hasReverse = map.edges.some(
+        (e) => e.fromNodeId === edge.toNodeId && e.toNodeId === edge.fromNodeId
+      );
+      let drawX1 = x1, drawY1 = y1, drawX2 = x2, drawY2 = y2;
+      if (hasReverse) {
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        const nx = -dy / len;
+        const ny = dx / len;
+        const offset = 3.0; // 3px lateral offset to the right of forward direction
+        drawX1 = x1 + nx * offset;
+        drawY1 = y1 + ny * offset;
+        drawX2 = x2 + nx * offset;
+        drawY2 = y2 + ny * offset;
+      }
 
       const isClosed = isScenario && (edge.isClosed || closedEdgeIds.includes(edge.id));
       const cong = congestionData ? congestionData[edge.id] : null;
@@ -264,7 +347,7 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
       }
 
       ctx.save();
-      ctx.lineWidth = 8;
+      ctx.lineWidth = hasReverse ? 5 : 8;
       ctx.strokeStyle = strokeColor;
       ctx.lineCap = 'round';
 
@@ -275,8 +358,8 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
       }
 
       ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
+      ctx.moveTo(drawX1, drawY1);
+      ctx.lineTo(drawX2, drawY2);
       ctx.stroke();
 
       if (!isClosed) {
@@ -284,13 +367,13 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
         ctx.strokeStyle = '#f8fafc33';
         ctx.setLineDash([4, 4]);
         ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
+        ctx.moveTo(drawX1, drawY1);
+        ctx.lineTo(drawX2, drawY2);
         ctx.stroke();
       }
 
-      const midX = (x1 + x2) / 2;
-      const midY = (y1 + y2) / 2;
+      const midX = (drawX1 + drawX2) / 2;
+      const midY = (drawY1 + drawY2) / 2;
       if (isClosed) {
         ctx.font = 'bold 10px sans-serif';
         ctx.fillStyle = '#fee2e2';
@@ -365,12 +448,35 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
 
           {/* Action & Configuration Buttons */}
           <div className="flex flex-wrap items-center gap-2.5">
+            {/* Map Selector */}
+            {mapList.length > 1 && (
+              <div className="flex items-center gap-1.5 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 text-xs">
+                <span className="text-slate-500">Map:</span>
+                <select
+                  value={baseMap.id || baseMap._id || ''}
+                  onChange={(e) => {
+                    const found = mapList.find((m) => (m.id || m._id) === e.target.value);
+                    if (found && onSelectMap) {
+                      onSelectMap(found);
+                    }
+                  }}
+                  className="bg-transparent font-medium text-slate-200 focus:outline-none"
+                >
+                  {mapList.map((m) => (
+                    <option key={m.id || m._id} value={m.id || m._id} className="bg-slate-900 text-slate-200">
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* Scenario Selector */}
             <div className="flex items-center gap-1.5 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 text-xs">
               <span className="text-slate-500">Scenario:</span>
               <select
                 value={selectedScenarioId}
-                onChange={(e) => setSelectedScenarioId(e.target.value)}
+                onChange={(e) => handleSelectScenario(e.target.value)}
                 className="bg-transparent font-medium text-slate-200 focus:outline-none"
               >
                 {stagedScenario && (
@@ -497,7 +603,7 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
         </div>
       </div>
 
-      {/* KPI Delta Cards (with Mean ± SD across replications) */}
+      {/* KPI Delta Cards (with Mean ± SD across replications and 95% Confidence Intervals) */}
       {comparisonResult ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           
@@ -508,23 +614,39 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
                 <Clock className="w-3.5 h-3.5 text-indigo-400" />
                 Avg Stopped Wait Time
               </span>
-              <span className={`text-xs px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
-                deltas!.deltaAvgWaitTime < 0 
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
-                  : deltas!.deltaAvgWaitTime > 0 
-                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' 
-                  : 'bg-slate-800 text-slate-400'
-              }`}>
-                {deltas!.deltaAvgWaitTime < 0 ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
-                {deltas!.pctChangeAvgWaitTime > 0 ? `+${deltas!.pctChangeAvgWaitTime}%` : `${deltas!.pctChangeAvgWaitTime}%`}
+              <span 
+                className={`text-xs px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
+                  !deltas!.isWaitTimeSignificant
+                    ? 'bg-slate-800 text-slate-400 border border-slate-700'
+                    : deltas!.deltaAvgWaitTime < 0 
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                    : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                }`}
+                title={deltas!.deltaAvgWaitTimeCI ? `95% CI: [${deltas!.deltaAvgWaitTimeCI[0]}s, ${deltas!.deltaAvgWaitTimeCI[1]}s]` : undefined}
+              >
+                {!deltas!.isWaitTimeSignificant ? (
+                  <>
+                    <Minus className="w-3 h-3 text-slate-400" />
+                    <span>Not Significant</span>
+                  </>
+                ) : (
+                  <>
+                    {deltas!.deltaAvgWaitTime < 0 ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
+                    <span>{deltas!.pctChangeAvgWaitTime > 0 ? `+${deltas!.pctChangeAvgWaitTime}%` : `${deltas!.pctChangeAvgWaitTime}%`}</span>
+                  </>
+                )}
               </span>
             </div>
 
             <div className="my-2">
               <div className="text-2xl font-black font-mono tracking-tight text-white flex items-baseline gap-2 flex-wrap">
-                <span>{scenarioMetrics?.averageWaitTime.toFixed(1)}s</span>
+                <span>{(deltas?.scenarioMeanWaitTime ?? scenarioMetrics?.averageWaitTime ?? 0).toFixed(1)}s</span>
                 <span className={`text-sm font-bold ${
-                  deltas!.deltaAvgWaitTime < 0 ? 'text-emerald-400' : deltas!.deltaAvgWaitTime > 0 ? 'text-rose-400' : 'text-slate-400'
+                  !deltas!.isWaitTimeSignificant 
+                    ? 'text-slate-400' 
+                    : deltas!.deltaAvgWaitTime < 0 
+                    ? 'text-emerald-400' 
+                    : 'text-rose-400'
                 }`}>
                   {deltas!.deltaAvgWaitTime > 0 ? `+${deltas!.deltaAvgWaitTime.toFixed(1)}s` : `${deltas!.deltaAvgWaitTime.toFixed(1)}s`}
                   {deltas!.deltaAvgWaitTimeStdDev !== undefined && deltas!.deltaAvgWaitTimeStdDev > 0 && (
@@ -533,13 +655,21 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
                 </span>
               </div>
               <div className="text-[11px] text-slate-500 mt-1">
-                Baseline: <span className="font-mono text-slate-300">{baselineMetrics?.averageWaitTime.toFixed(1)}s</span>
+                Baseline (Mean): <span className="font-mono text-slate-300">{(deltas?.baselineMeanWaitTime ?? baselineMetrics?.averageWaitTime ?? 0).toFixed(1)}s</span>
               </div>
             </div>
 
             <div className="text-[11px] text-slate-400 pt-2 border-t border-slate-800/80 flex items-center justify-between">
-              <span>{deltas!.deltaAvgWaitTime < 0 ? '🟢 Delay reduced' : deltas!.deltaAvgWaitTime > 0 ? '🔴 Delay increased' : 'Neutral'}</span>
-              <span className="text-[10px] text-slate-500">Post-warmup (N={deltas!.replicationsCount || 5} pairs)</span>
+              <span>
+                {!deltas!.isWaitTimeSignificant 
+                  ? '⚪ No significant difference' 
+                  : deltas!.deltaAvgWaitTime < 0 
+                  ? '🟢 Delay reduced' 
+                  : '🔴 Delay increased'}
+              </span>
+              <span className="text-[10px] text-slate-500" title={deltas!.deltaAvgWaitTimeCI ? `95% CI: [${deltas!.deltaAvgWaitTimeCI[0]}s, ${deltas!.deltaAvgWaitTimeCI[1]}s]` : ''}>
+                Mean across {deltas!.replicationsCount || 5} pairs
+              </span>
             </div>
           </div>
 
@@ -550,23 +680,39 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
                 <Gauge className="w-3.5 h-3.5 text-cyan-400" />
                 Avg Travel Time
               </span>
-              <span className={`text-xs px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
-                deltas!.deltaAvgTravelTime < 0 
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
-                  : deltas!.deltaAvgTravelTime > 0 
-                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' 
-                  : 'bg-slate-800 text-slate-400'
-              }`}>
-                {deltas!.deltaAvgTravelTime < 0 ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
-                {deltas!.pctChangeAvgTravelTime > 0 ? `+${deltas!.pctChangeAvgTravelTime}%` : `${deltas!.pctChangeAvgTravelTime}%`}
+              <span 
+                className={`text-xs px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
+                  !deltas!.isTravelTimeSignificant
+                    ? 'bg-slate-800 text-slate-400 border border-slate-700'
+                    : deltas!.deltaAvgTravelTime < 0 
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                    : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                }`}
+                title={deltas!.deltaAvgTravelTimeCI ? `95% CI: [${deltas!.deltaAvgTravelTimeCI[0]}s, ${deltas!.deltaAvgTravelTimeCI[1]}s]` : undefined}
+              >
+                {!deltas!.isTravelTimeSignificant ? (
+                  <>
+                    <Minus className="w-3 h-3 text-slate-400" />
+                    <span>Not Significant</span>
+                  </>
+                ) : (
+                  <>
+                    {deltas!.deltaAvgTravelTime < 0 ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
+                    <span>{deltas!.pctChangeAvgTravelTime > 0 ? `+${deltas!.pctChangeAvgTravelTime}%` : `${deltas!.pctChangeAvgTravelTime}%`}</span>
+                  </>
+                )}
               </span>
             </div>
 
             <div className="my-2">
               <div className="text-2xl font-black font-mono tracking-tight text-white flex items-baseline gap-2 flex-wrap">
-                <span>{scenarioMetrics?.averageTravelTime.toFixed(1)}s</span>
+                <span>{(deltas?.scenarioMeanTravelTime ?? scenarioMetrics?.averageTravelTime ?? 0).toFixed(1)}s</span>
                 <span className={`text-sm font-bold ${
-                  deltas!.deltaAvgTravelTime < 0 ? 'text-emerald-400' : deltas!.deltaAvgTravelTime > 0 ? 'text-rose-400' : 'text-slate-400'
+                  !deltas!.isTravelTimeSignificant
+                    ? 'text-slate-400'
+                    : deltas!.deltaAvgTravelTime < 0 
+                    ? 'text-emerald-400' 
+                    : 'text-rose-400'
                 }`}>
                   {deltas!.deltaAvgTravelTime > 0 ? `+${deltas!.deltaAvgTravelTime.toFixed(1)}s` : `${deltas!.deltaAvgTravelTime.toFixed(1)}s`}
                   {deltas!.deltaAvgTravelTimeStdDev !== undefined && deltas!.deltaAvgTravelTimeStdDev > 0 && (
@@ -575,13 +721,15 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
                 </span>
               </div>
               <div className="text-[11px] text-slate-500 mt-1">
-                Baseline: <span className="font-mono text-slate-300">{baselineMetrics?.averageTravelTime.toFixed(1)}s</span>
+                Baseline (Mean): <span className="font-mono text-slate-300">{(deltas?.baselineMeanTravelTime ?? baselineMetrics?.averageTravelTime ?? 0).toFixed(1)}s</span>
               </div>
             </div>
 
             <div className="text-[11px] text-slate-400 pt-2 border-t border-slate-800/80 flex items-center justify-between">
               <span>Trip duration for completed trips</span>
-              <span className="text-[10px] text-slate-500">Post-warmup (N={deltas!.replicationsCount || 5} pairs)</span>
+              <span className="text-[10px] text-slate-500" title={deltas!.deltaAvgTravelTimeCI ? `95% CI: [${deltas!.deltaAvgTravelTimeCI[0]}s, ${deltas!.deltaAvgTravelTimeCI[1]}s]` : ''}>
+                Mean across {deltas!.replicationsCount || 5} pairs
+              </span>
             </div>
           </div>
 
@@ -592,24 +740,40 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
                 <BarChart3 className="w-3.5 h-3.5 text-emerald-400" />
                 Network Throughput
               </span>
-              <span className={`text-xs px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
-                deltas!.deltaThroughput > 0 
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
-                  : deltas!.deltaThroughput < 0 
-                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' 
-                  : 'bg-slate-800 text-slate-400'
-              }`}>
-                {deltas!.deltaThroughput > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                {deltas!.pctChangeThroughput > 0 ? `+${deltas!.pctChangeThroughput}%` : `${deltas!.pctChangeThroughput}%`}
+              <span 
+                className={`text-xs px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
+                  !deltas!.isThroughputSignificant
+                    ? 'bg-slate-800 text-slate-400 border border-slate-700'
+                    : deltas!.deltaThroughput > 0 
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                    : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                }`}
+                title={deltas!.deltaThroughputCI ? `95% CI: [${deltas!.deltaThroughputCI[0]} veh/h, ${deltas!.deltaThroughputCI[1]} veh/h]` : undefined}
+              >
+                {!deltas!.isThroughputSignificant ? (
+                  <>
+                    <Minus className="w-3 h-3 text-slate-400" />
+                    <span>Not Significant</span>
+                  </>
+                ) : (
+                  <>
+                    {deltas!.deltaThroughput > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                    <span>{deltas!.pctChangeThroughput > 0 ? `+${deltas!.pctChangeThroughput}%` : `${deltas!.pctChangeThroughput}%`}</span>
+                  </>
+                )}
               </span>
             </div>
 
             <div className="my-2">
               <div className="text-2xl font-black font-mono tracking-tight text-white flex items-baseline gap-2 flex-wrap">
-                <span>{Math.round(scenarioMetrics?.throughputPerHour || 0)}</span>
+                <span>{Math.round(deltas?.scenarioMeanThroughput ?? scenarioMetrics?.throughputPerHour ?? 0)}</span>
                 <span className="text-xs text-slate-400">veh/h</span>
                 <span className={`text-sm font-bold ${
-                  deltas!.deltaThroughput > 0 ? 'text-emerald-400' : deltas!.deltaThroughput < 0 ? 'text-rose-400' : 'text-slate-400'
+                  !deltas!.isThroughputSignificant
+                    ? 'text-slate-400'
+                    : deltas!.deltaThroughput > 0 
+                    ? 'text-emerald-400' 
+                    : 'text-rose-400'
                 }`}>
                   {deltas!.deltaThroughput > 0 ? `+${Math.round(deltas!.deltaThroughput)}` : `${Math.round(deltas!.deltaThroughput)}`}
                   {deltas!.deltaThroughputStdDev !== undefined && deltas!.deltaThroughputStdDev > 0 && (
@@ -618,13 +782,15 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
                 </span>
               </div>
               <div className="text-[11px] text-slate-500 mt-1">
-                Baseline: <span className="font-mono text-slate-300">{Math.round(baselineMetrics?.throughputPerHour || 0)} veh/h</span>
+                Baseline (Mean): <span className="font-mono text-slate-300">{Math.round(deltas?.baselineMeanThroughput ?? baselineMetrics?.throughputPerHour ?? 0)} veh/h</span>
               </div>
             </div>
 
             <div className="text-[11px] text-slate-400 pt-2 border-t border-slate-800/80 flex items-center justify-between">
               <span>Completed trips / eval hour</span>
-              <span className="text-[10px] text-slate-500">Post-warmup (N={deltas!.replicationsCount || 5} pairs)</span>
+              <span className="text-[10px] text-slate-500" title={deltas!.deltaThroughputCI ? `95% CI: [${deltas!.deltaThroughputCI[0]} veh/h, ${deltas!.deltaThroughputCI[1]} veh/h]` : ''}>
+                Mean across {deltas!.replicationsCount || 5} pairs
+              </span>
             </div>
           </div>
 
@@ -635,17 +801,40 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
                 <Gauge className="w-3.5 h-3.5 text-amber-400" />
                 Mean Network Speed
               </span>
-              <span className="text-xs px-2 py-0.5 rounded-full font-mono bg-slate-800 text-slate-300">
-                Max Q: {scenarioMetrics?.maxQueueLength || 0} veh
+              <span 
+                className={`text-xs px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
+                  !deltas!.isSpeedSignificant
+                    ? 'bg-slate-800 text-slate-400 border border-slate-700'
+                    : deltas!.deltaAvgSpeed > 0 
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                    : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                }`}
+                title={deltas!.deltaAvgSpeedCI ? `95% CI: [${deltas!.deltaAvgSpeedCI[0]} km/h, ${deltas!.deltaAvgSpeedCI[1]} km/h]` : undefined}
+              >
+                {!deltas!.isSpeedSignificant ? (
+                  <>
+                    <Minus className="w-3 h-3 text-slate-400" />
+                    <span>Not Significant</span>
+                  </>
+                ) : (
+                  <>
+                    {deltas!.deltaAvgSpeed > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                    <span>{deltas!.deltaAvgSpeed > 0 ? `+${deltas!.deltaAvgSpeed.toFixed(1)}` : `${deltas!.deltaAvgSpeed.toFixed(1)}`} km/h</span>
+                  </>
+                )}
               </span>
             </div>
 
             <div className="my-2">
               <div className="text-2xl font-black font-mono tracking-tight text-white flex items-baseline gap-2 flex-wrap">
-                <span>{scenarioMetrics?.averageSpeed.toFixed(1)}</span>
+                <span>{(deltas?.scenarioMeanSpeed ?? ((scenarioMetrics?.averageSpeed ?? 0) * 3.6)).toFixed(1)}</span>
                 <span className="text-xs text-slate-400">km/h</span>
                 <span className={`text-sm font-bold ${
-                  deltas!.deltaAvgSpeed > 0 ? 'text-emerald-400' : deltas!.deltaAvgSpeed < 0 ? 'text-rose-400' : 'text-slate-400'
+                  !deltas!.isSpeedSignificant
+                    ? 'text-slate-400'
+                    : deltas!.deltaAvgSpeed > 0 
+                    ? 'text-emerald-400' 
+                    : 'text-rose-400'
                 }`}>
                   {deltas!.deltaAvgSpeed > 0 ? `+${deltas!.deltaAvgSpeed.toFixed(1)}` : `${deltas!.deltaAvgSpeed.toFixed(1)}`}
                   {deltas!.deltaAvgSpeedStdDev !== undefined && deltas!.deltaAvgSpeedStdDev > 0 && (
@@ -654,12 +843,12 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
                 </span>
               </div>
               <div className="text-[11px] text-slate-500 mt-1">
-                Baseline: <span className="font-mono text-slate-300">{baselineMetrics?.averageSpeed.toFixed(1)} km/h</span>
+                Baseline (Mean): <span className="font-mono text-slate-300">{(deltas?.baselineMeanSpeed ?? ((baselineMetrics?.averageSpeed ?? 0) * 3.6)).toFixed(1)} km/h</span>
               </div>
             </div>
 
             <div className="text-[11px] text-slate-400 pt-2 border-t border-slate-800/80 flex items-center justify-between">
-              <span>Completed: <span className="text-white font-semibold">{scenarioMetrics?.completedVehiclesCount}</span> / {scenarioMetrics?.totalSpawned} spawned</span>
+              <span>Completed (Mean): <span className="text-white font-semibold">{deltas?.scenarioMeanCompleted ?? scenarioMetrics?.completedVehiclesCount}</span> veh</span>
               <button 
                 onClick={() => setShowReplicationsTable(!showReplicationsTable)}
                 className="text-[10px] text-indigo-400 hover:underline flex items-center gap-0.5"
@@ -688,7 +877,7 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
             disabled={isRunning}
             className="px-5 py-2 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg transition"
           >
-            Run West Road Closure Test (600s, 5 Replications)
+            Run {scenarios.find((s) => s.modifications?.closedEdgeIds?.length > 0)?.name || 'Road Closure Test'} ({durationSeconds}s, {replications} Replications)
           </button>
         </div>
       )}
@@ -831,8 +1020,8 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
                   className="rounded-lg bg-slate-900 border border-slate-800 max-w-full"
                 />
                 <div className="w-full flex items-center justify-between text-[11px] text-slate-400 mt-2 px-1">
-                  <span>Throughput: {Math.round(baselineMetrics?.throughputPerHour || 0)} veh/h</span>
-                  <span>Wait: {baselineMetrics?.averageWaitTime.toFixed(1)}s</span>
+                  <span>Throughput (Seed {comparisonResult.baseline.seed}): {Math.round(baselineMetrics?.throughputPerHour || 0)} veh/h</span>
+                  <span>Wait (Seed {comparisonResult.baseline.seed}): {baselineMetrics?.averageWaitTime.toFixed(1)}s</span>
                 </div>
               </div>
             )}
@@ -843,10 +1032,12 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
                 <div className="w-full flex items-center justify-between mb-2">
                   <span className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-indigo-400" />
-                    Modified Scenario: {comparisonResult.scenario.scenarioName}
+                    Modified Scenario: {comparisonResult.scenario.scenarioName || 'Modified Scenario'}
                   </span>
-                  <span className="text-[11px] text-amber-400">
-                    {deltas!.deltaAvgWaitTime > 0 ? `+${deltas!.deltaAvgWaitTime.toFixed(1)}s delay` : `${deltas!.deltaAvgWaitTime.toFixed(1)}s delay`}
+                  <span className={`text-[11px] ${!deltas!.isWaitTimeSignificant ? 'text-slate-400' : deltas!.deltaAvgWaitTime < 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {!deltas!.isWaitTimeSignificant 
+                      ? `Δ ${deltas!.deltaAvgWaitTime > 0 ? '+' : ''}${deltas!.deltaAvgWaitTime.toFixed(1)}s (not sig)` 
+                      : `${deltas!.deltaAvgWaitTime > 0 ? '+' : ''}${deltas!.deltaAvgWaitTime.toFixed(1)}s delay`}
                   </span>
                 </div>
                 <canvas
@@ -856,8 +1047,8 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
                   className="rounded-lg bg-slate-900 border border-slate-800 max-w-full"
                 />
                 <div className="w-full flex items-center justify-between text-[11px] text-slate-400 mt-2 px-1">
-                  <span>Throughput: {Math.round(scenarioMetrics?.throughputPerHour || 0)} veh/h</span>
-                  <span>Wait: {scenarioMetrics?.averageWaitTime.toFixed(1)}s</span>
+                  <span>Throughput (Seed {comparisonResult.scenario.seed}): {Math.round(scenarioMetrics?.throughputPerHour || 0)} veh/h</span>
+                  <span>Wait (Seed {comparisonResult.scenario.seed}): {scenarioMetrics?.averageWaitTime.toFixed(1)}s</span>
                 </div>
               </div>
             )}
@@ -873,10 +1064,10 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
             <div>
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-indigo-400" />
-                Comparative Time-Series Metrics
+                Comparative Time-Series Metrics (Primary Run: Seed {comparisonResult.baseline.seed})
               </h3>
               <p className="text-xs text-slate-400">
-                Continuous performance trajectories across simulation duration (interval: 5.0s, warm-up: 60s).
+                Continuous performance trajectories for Seed {comparisonResult.baseline.seed} across simulation duration (interval: 5.0s, warm-up: 60s).
               </p>
             </div>
 
@@ -950,7 +1141,7 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
                   <Area 
                     type="monotone" 
                     dataKey="baselineWaitTime" 
-                    name="Baseline Wait Time" 
+                    name={`Baseline Wait Time (Seed ${comparisonResult.baseline.seed})`} 
                     stroke="#38bdf8" 
                     fillOpacity={1} 
                     fill="url(#colorBaseWait)" 
@@ -959,7 +1150,7 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
                   <Area 
                     type="monotone" 
                     dataKey="scenarioWaitTime" 
-                    name="Modified Scenario Wait Time" 
+                    name={`Modified Scenario Wait Time (Seed ${comparisonResult.scenario.seed})`} 
                     stroke="#f43f5e" 
                     fillOpacity={1} 
                     fill="url(#colorScenWait)" 
@@ -986,7 +1177,7 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
                   <Line 
                     type="monotone" 
                     dataKey="baselineSpeed" 
-                    name="Baseline Speed" 
+                    name={`Baseline Speed (Seed ${comparisonResult.baseline.seed})`} 
                     stroke="#38bdf8" 
                     strokeWidth={2} 
                     dot={false}
@@ -994,7 +1185,7 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
                   <Line 
                     type="monotone" 
                     dataKey="scenarioSpeed" 
-                    name="Scenario Speed" 
+                    name={`Scenario Speed (Seed ${comparisonResult.scenario.seed})`} 
                     stroke="#10b981" 
                     strokeWidth={2} 
                     dot={false}
@@ -1019,7 +1210,7 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
                   <Line 
                     type="monotone" 
                     dataKey="baselineActiveVehicles" 
-                    name="Baseline Active Vehicles" 
+                    name={`Baseline Active Vehicles (Seed ${comparisonResult.baseline.seed})`} 
                     stroke="#38bdf8" 
                     strokeWidth={2} 
                     dot={false}
@@ -1027,7 +1218,7 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
                   <Line 
                     type="monotone" 
                     dataKey="scenarioActiveVehicles" 
-                    name="Scenario Active Vehicles" 
+                    name={`Scenario Active Vehicles (Seed ${comparisonResult.scenario.seed})`} 
                     stroke="#fbbf24" 
                     strokeWidth={2} 
                     dot={false}
@@ -1094,12 +1285,19 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
                 {baseMap.edges.map((edge: RoadSegment) => {
                   const bCong = comparisonResult.baseline.roadCongestion[edge.id];
                   const sCong = comparisonResult.scenario.roadCongestion[edge.id];
-                  const isClosed = (stagedScenario as any)?.modifications?.closedEdgeIds?.includes(edge.id) ||
-                    scenarios.find((s) => (s.id || s._id) === selectedScenarioId)?.modifications?.closedEdgeIds?.includes(edge.id);
+                  const closedEdges = comparisonResult.scenario.modifications?.closedEdgeIds || 
+                    (stagedScenario as any)?.modifications?.closedEdgeIds || [];
+                  const isClosed = closedEdges.includes(edge.id);
 
                   const bVc = bCong ? bCong.volumeToCapacityRatio : 0;
                   const sVc = sCong ? sCong.volumeToCapacityRatio : 0;
                   const dVc = sVc - bVc;
+
+                  // Check if the origin node has any other outgoing road in this scenario
+                  const remainingOutgoing = baseMap.edges.filter(
+                    (e) => e.fromNodeId === edge.fromNodeId && !closedEdges.includes(e.id)
+                  );
+                  const hasAlternateRoute = remainingOutgoing.length > 0;
 
                   return (
                     <tr key={edge.id} className="hover:bg-slate-800/30 transition">
@@ -1124,7 +1322,11 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
                       </td>
                       <td className="py-2 px-3">
                         {isClosed ? (
-                          <span className="text-rose-400">Traffic Diverted</span>
+                          hasAlternateRoute ? (
+                            <span className="text-amber-400">Traffic Diverted to alternate route</span>
+                          ) : (
+                            <span className="text-rose-400 font-semibold">No alternate route (Demand unserved)</span>
+                          )
                         ) : dVc > 0.1 ? (
                           <span className="text-amber-400">+{dVc.toFixed(2)} (Higher flow)</span>
                         ) : dVc < -0.1 ? (

@@ -10,6 +10,12 @@ import type {
   SegmentCongestionData,
 } from '../../engine/src/types.ts';
 
+export interface ODPairConfig {
+  originNodeId: string;
+  destinationNodeId: string;
+  arrivalRatePerHour: number;
+}
+
 export interface MapData {
   id?: string;
   _id?: string;
@@ -17,6 +23,7 @@ export interface MapData {
   description?: string;
   nodes: IntersectionNode[];
   edges: RoadSegment[];
+  odPairs?: ODPairConfig[];
   createdAt?: Date | string;
   updatedAt?: Date | string;
 }
@@ -43,6 +50,7 @@ export interface ScenarioData {
   seed: number;
   demandMultiplier: number;
   modifications: ScenarioModifications;
+  odPairs?: ODPairConfig[];
   createdAt?: Date | string;
   updatedAt?: Date | string;
 }
@@ -55,6 +63,7 @@ export interface RunData {
   scenarioName?: string;
   seed: number;
   durationSeconds: number;
+  modifications?: ScenarioModifications;
   aggregateMetrics: ComprehensiveMetrics;
   timeSeries: TimeSeriesSnapshot[];
   roadCongestion: Record<string, SegmentCongestionData>;

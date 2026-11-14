@@ -272,3 +272,53 @@ test('NetworkSimulation: Time-series snapshots record dynamic wait time, speed, 
   assert.strictEqual(typeof snap.completedVehicles, 'number');
 });
 
+test('NetworkSimulation: West approach road closure drops unroutable west origin demand without crash', () => {
+  const defaultNodes = [
+    { id: 'node_center', x: 200, y: 200, controlType: 'fixed_signal' as const, incomingEdgeIds: ['road_W_C', 'road_S_C'], outgoingEdgeIds: ['road_C_E', 'road_C_N'] },
+    { id: 'node_west', x: 50, y: 200, controlType: 'unsignalized' as const, incomingEdgeIds: [], outgoingEdgeIds: [] },
+    { id: 'node_south', x: 200, y: 350, controlType: 'unsignalized' as const, incomingEdgeIds: [], outgoingEdgeIds: [] },
+    { id: 'node_east', x: 350, y: 200, controlType: 'unsignalized' as const, incomingEdgeIds: [], outgoingEdgeIds: [] },
+    { id: 'node_north', x: 200, y: 50, controlType: 'unsignalized' as const, incomingEdgeIds: [], outgoingEdgeIds: [] },
+  ];
+  const defaultEdges = [
+    { id: 'road_W_C', fromNodeId: 'node_west', toNodeId: 'node_center', length: 150, speedLimit: 13.89, lanes: 2, isOneWay: true },
+    { id: 'road_S_C', fromNodeId: 'node_south', toNodeId: 'node_center', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+    { id: 'road_C_E', fromNodeId: 'node_center', toNodeId: 'node_east', length: 150, speedLimit: 13.89, lanes: 2, isOneWay: true },
+    { id: 'road_C_N', fromNodeId: 'node_center', toNodeId: 'node_north', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+  ];
+
+  const graph = RoadGraph.fromJSON({ nodes: defaultNodes, edges: defaultEdges });
+  // Close road_W_C (the only outgoing road from node_west)
+  graph.setRoadClosure('road_W_C', true);
+
+  const sim = new NetworkSimulation({
+    graph,
+    config: { seed: 42, timeStep: 0.1 },
+    odPairs: [
+      { originNodeId: 'node_west', destinationNodeId: 'node_east', arrivalRatePerHour: 600 },
+      { originNodeId: 'node_west', destinationNodeId: 'node_north', arrivalRatePerHour: 600 },
+      { originNodeId: 'node_south', destinationNodeId: 'node_east', arrivalRatePerHour: 600 },
+      { originNodeId: 'node_south', destinationNodeId: 'node_north', arrivalRatePerHour: 600 },
+    ],
+  });
+
+  // Run for 300 seconds (3000 ticks)
+  sim.step(3000);
+
+  const allVehicles = [...sim.getActiveVehicles(), ...sim.getCompletedVehicles()];
+  const westVehicles = allVehicles.filter(v => v.originNodeId === 'node_west');
+  const southVehicles = allVehicles.filter(v => v.originNodeId === 'node_south');
+
+  // West vehicles have no route to network, so zero west vehicles should be spawned
+  assert.strictEqual(westVehicles.length, 0);
+
+  // South vehicles have open route road_S_C, so south vehicles spawn and complete normally
+  assert.strictEqual(southVehicles.length > 0, true);
+  assert.strictEqual(sim.getCompletedVehicles().length > 0, true);
+
+  const metrics = sim.getComprehensiveMetrics(60);
+  assert.strictEqual(metrics.completedVehiclesCount > 0, true);
+  assert.strictEqual(metrics.throughputPerHour > 0, true);
+});
+
+

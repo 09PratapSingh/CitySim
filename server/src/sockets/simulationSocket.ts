@@ -69,26 +69,27 @@ export function setupSimulationSockets(io: SocketIOServer): void {
         // Apply scenario if specified
         let scenarioName = 'Baseline';
         let demandMultiplier = 1.0;
+        let activeScenario: any = null;
         if (scenarioId) {
-          const scenario = await DataStore.getScenarioById(scenarioId);
-          if (scenario) {
-            scenarioName = scenario.name;
-            demandMultiplier = scenario.demandMultiplier ?? 1.0;
-            if (Array.isArray(scenario.modifications?.closedEdgeIds)) {
-              for (const closedId of scenario.modifications.closedEdgeIds) {
+          activeScenario = await DataStore.getScenarioById(scenarioId);
+          if (activeScenario) {
+            scenarioName = activeScenario.name;
+            demandMultiplier = activeScenario.demandMultiplier ?? 1.0;
+            if (Array.isArray(activeScenario.modifications?.closedEdgeIds)) {
+              for (const closedId of activeScenario.modifications.closedEdgeIds) {
                 if (graph.getEdge(closedId)) {
                   graph.setRoadClosure(closedId, true);
                 }
               }
             }
-            if (Array.isArray(scenario.modifications?.speedLimitOverrides)) {
-              for (const override of scenario.modifications.speedLimitOverrides) {
+            if (Array.isArray(activeScenario.modifications?.speedLimitOverrides)) {
+              for (const override of activeScenario.modifications.speedLimitOverrides) {
                 const edge = graph.getEdge(override.edgeId);
                 if (edge) edge.speedLimit = override.speedLimit;
               }
             }
-            if (Array.isArray(scenario.modifications?.signalOverrides)) {
-              for (const sigOverride of scenario.modifications.signalOverrides) {
+            if (Array.isArray(activeScenario.modifications?.signalOverrides)) {
+              for (const sigOverride of activeScenario.modifications.signalOverrides) {
                 const node = graph.getNode(sigOverride.nodeId);
                 if (node) {
                   node.controlType = sigOverride.controlType;
@@ -102,23 +103,35 @@ export function setupSimulationSockets(io: SocketIOServer): void {
         // Setup demand matrix
         const odMatrix = new ODMatrix();
         const allNodes = graph.getAllNodes();
-        const origins = allNodes.filter((n) => graph.getIncomingEdges(n.id).length === 0);
-        const destinations = allNodes.filter((n) => graph.getOutgoingEdges(n.id).length === 0);
-        const flowRate = 600 * demandMultiplier;
 
-        if (origins.length > 0 && destinations.length > 0) {
-          for (const orig of origins) {
-            for (const dest of destinations) {
-              if (orig.id !== dest.id) {
-                odMatrix.setFlow(orig.id, dest.id, flowRate);
-              }
-            }
+        const explicitOD = activeScenario?.odPairs || (map as any)?.odPairs;
+        if (Array.isArray(explicitOD) && explicitOD.length > 0) {
+          for (const od of explicitOD) {
+            odMatrix.setFlow(
+              od.originNodeId,
+              od.destinationNodeId,
+              od.arrivalRatePerHour * demandMultiplier
+            );
           }
         } else {
-          for (let i = 0; i < allNodes.length; i++) {
-            for (let j = 0; j < allNodes.length; j++) {
-              if (i !== j) {
-                odMatrix.setFlow(allNodes[i].id, allNodes[j].id, Math.max(100, flowRate / allNodes.length));
+          const origins = allNodes.filter((n) => graph.getIncomingEdges(n.id).length === 0);
+          const destinations = allNodes.filter((n) => graph.getOutgoingEdges(n.id).length === 0);
+          const flowRate = 600 * demandMultiplier;
+
+          if (origins.length > 0 && destinations.length > 0) {
+            for (const orig of origins) {
+              for (const dest of destinations) {
+                if (orig.id !== dest.id) {
+                  odMatrix.setFlow(orig.id, dest.id, flowRate);
+                }
+              }
+            }
+          } else {
+            for (let i = 0; i < allNodes.length; i++) {
+              for (let j = 0; j < allNodes.length; j++) {
+                if (i !== j) {
+                  odMatrix.setFlow(allNodes[i].id, allNodes[j].id, Math.max(100, flowRate / allNodes.length));
+                }
               }
             }
           }

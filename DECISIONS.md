@@ -434,3 +434,62 @@ This document records the critical architectural, algorithmic, and engineering d
 - **Alternatives Rejected:**
   - *Text-only aggregate summary tables:* Hides dynamic queuing waves, shockwave propagation, and signal cycle transitions.
 - **Viva Defense Note:** Gives examiners clear graphical evidence of dynamic congestion phenomena, allowing in-depth discussion of transient vs. steady-state queuing behavior during defense.
+
+---
+
+## ADR 033: Unroutable Origin Demand Handling & Road Closure Semantics
+
+- **Status:** Accepted (Stage 7 Refinement)
+- **Context:** When a road segment is closed (e.g. `road_W_C`), if the upstream origin node (`node_west`) possesses no alternate outgoing road links, vehicles attempting to travel from that origin cannot find any feasible physical path through the network ($A^*$ routing returns `null`).
+- **Decision:**
+  1. In `TrafficGenerator.pollArrivals`, when $A^*$ routing finds no path (`route === null`), arrivals from that origin are **dropped / blocked at the boundary** rather than being spawned into limbo or artificially re-assigned to unrelated origins.
+  2. The simulation continues executing reliably for all unaffected origins (e.g. `node_south`), correctly recording the resulting drop in total network completed trips and throughput.
+  3. In the Road Segment Congestion breakdown table, road closures are accurately categorized:
+     - If the origin node has remaining alternate open outgoing links, the status is labeled `"Traffic Diverted to alternate route"`.
+     - If the origin node has no remaining open outgoing links (such as `road_W_C`), the status is labeled `"No alternate route (Demand unserved)"`.
+- **Alternatives Rejected:**
+  - *Arbitrary Origin Reassignment:* Forcing west commuter traffic to spawn at south or north nodes creates unscientific, synthetic distortions in the OD demand matrix.
+  - *Generic "Traffic Diverted" Label:* Misleads users into believing traffic was rerouted when no alternate physical road exists.
+- **Viva Defense Note:** Accurately reflects transportation network topology: an isolated road closure with zero redundancy halts origin entry (unmet latent demand), whereas network closures with parallel corridors trigger genuine detour redistribution.
+
+---
+
+## ADR 034: Two-Tailed Student's t-Distribution 95% Confidence Intervals for Paired Replications
+
+- **Status:** Accepted (Stage 7 Refinement)
+- **Context:** In stochastic microscopic traffic simulation, small observed deltas (e.g. $\Delta W = -0.8\text{s}$) may be smaller than the standard deviation of paired run differences (e.g. $s = \pm 1.9\text{s}$). Coloring such results green or red gives users a false sense of certainty regarding statistically insignificant random variations.
+- **Decision:**
+  1. Calculate sample mean $\bar{\Delta}$, sample standard deviation $s$, and standard error of the mean $SE = \frac{s}{\sqrt{N}}$ across all paired replications.
+  2. Compute the exact **two-tailed 95% Confidence Interval** using Student's $t$-distribution with $df = N - 1$ degrees of freedom:
+     $$CI_{95\%} = \left[ \bar{\Delta} - t^* \cdot \frac{s}{\sqrt{N}}, \; \bar{\Delta} + t^* \cdot \frac{s}{\sqrt{N}} \right]$$
+     (e.g. $t^*(4) = 2.776$ for $N = 5$).
+  3. Formulate significance criteria:
+     - If $0 \in [CI_{\text{lower}}, CI_{\text{upper}}]$, the result is **not statistically significant** ($p > 0.05$). The KPI card displays a neutral slate badge labeled `"Not Significant"` with tooltip revealing the confidence interval.
+     - If $0 \notin [CI_{\text{lower}}, CI_{\text{upper}}]$, the result is **statistically significant** ($p < 0.05$), and semantic green (improvement) or red (degradation) badges and text colors are applied.
+  4. Ensure headline KPI card values display the replication mean for both Scenario and Baseline, guaranteeing that $\bar{W}_{\text{scenario}} - \bar{W}_{\text{baseline}} \equiv \bar{\Delta}W$.
+- **Alternatives Rejected:**
+  - *Normal Z-Distribution Approximation:* Severely underestimates confidence interval width at small sample sizes ($N = 3$ to $10$). Student's $t$-distribution is the mathematically appropriate model for small-sample inferential statistics.
+  - *Unconditional Green/Red Thresholds:* False positives occur whenever random variance happens to produce a slightly positive or negative average.
+- **Viva Defense Note:** Demonstrates university-level statistical mastery and scientific integrity. Shows examiners that the platform differentiates genuine causal infrastructure impacts from stochastic simulation noise.
+
+---
+
+## ADR 035: 3x3 Urban Grid Network Topology & Perimeter Detour Pathfinding
+
+- **Status:** Accepted (Stage 8 Prep / Grid Detour Testing)
+- **Context:** The default 4-arm cross intersection has zero route redundancy for its boundary entry links; closing `road_W_C` drops the entire west origin demand because no physical bypass exists. To test and demonstrate dynamic alternate route (detour) assignment in Stage 8, the platform requires an urban grid network topology with parallel bypass corridors.
+- **Decision:**
+  1. **3x3 Grid Network Architecture:** Construct a 9-node, 24-directed-edge planar city block grid (`node_TL` to `node_BR`). Adjacent nodes are linked by bidirectional roads (dx = 200m, dy = 150m). The center junction (`node_C`) operates a 2-phase fixed signal (EW / NS alternating phases), while boundary nodes operate as unsignalized urban intersections.
+  2. **Explicit OD Matrix Configuration:** Introduce optional `odPairs` on `MapData` and `ScenarioData`. For the 3x3 grid, define primary corridor demand from Mid-Left (`node_ML`) to Mid-Right (`node_MR`) at 800 veh/h, alongside minor cross-traffic from Top-Center (`node_TC`) to Bottom-Center (`node_BC`) at 200 veh/h to exercise the center signal.
+  3. **Detour Path Assignment Under Link Closure:** Introduce the `"Center Route Closure"` scenario which closes `road_ML_C`. Under this closure:
+     - Baseline routes through center: `['road_ML_C', 'road_C_MR']` (total length: 400m, 2 hops).
+     - Scenario detours around center via perimeter corridors: `['road_ML_TL', 'road_TL_TC', 'road_TC_TR', 'road_TR_MR']` or southern counterpart (total length: 700m, 4 hops).
+     - $A^*$ pathfinding preserves **100% of origin demand** (0 dropped vehicles).
+     - Travel time increases proportionally with path length (from ~46.2s to ~61.4s), verifying detour impedance dynamics.
+  4. **Bidirectional Canvas Schematic Offset:** On the 2D canvas schematic, opposing directed edges are rendered with a 3px lateral normal offset, cleanly separating eastbound from westbound channels and ensuring closed links (`🚧 CLOSED`) do not visually collide with open reverse links.
+- **Alternatives Rejected:**
+  - *Automated All-to-All OD Flow Generation on Grids:* Flooding all 9 nodes with all-to-all demand disperses traffic across 72 pairs, diluting corridor-specific detour visualization.
+  - *Arbitrary Diagonal Rerouting:* Violates Manhattan grid physical road connectivity.
+- **Viva Defense Note:** Proves that CitySim's routing and microscopic simulation accurately reproduce Wardrop's First Principle of user equilibrium: when a critical arterial is severed, traffic shifts to minimum-cost alternate paths in the network rather than disappearing.
+
+

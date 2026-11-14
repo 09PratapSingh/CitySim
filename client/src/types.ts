@@ -44,6 +44,12 @@ export interface RoadSegment {
   endCoord?: { x: number; y: number };
 }
 
+export interface ODPairConfig {
+  originNodeId: string;
+  destinationNodeId: string;
+  arrivalRatePerHour: number;
+}
+
 export interface MapData {
   id?: string;
   _id?: string;
@@ -51,6 +57,7 @@ export interface MapData {
   description?: string;
   nodes: IntersectionNode[];
   edges: RoadSegment[];
+  odPairs?: ODPairConfig[];
   createdAt?: string | Date;
   updatedAt?: string | Date;
 }
@@ -142,6 +149,7 @@ export interface ScenarioData {
   seed: number;
   demandMultiplier: number;
   modifications: ScenarioModifications;
+  odPairs?: ODPairConfig[];
   createdAt?: string | Date;
   updatedAt?: string | Date;
 }
@@ -165,6 +173,7 @@ export interface RunData {
   scenarioName?: string;
   seed: number;
   durationSeconds: number;
+  modifications?: ScenarioModifications;
   aggregateMetrics: {
     currentTime: number;
     activeVehiclesCount: number;
@@ -196,21 +205,41 @@ export interface RunData {
 export interface ComparisonDeltas {
   deltaAvgWaitTime: number;
   deltaAvgWaitTimeStdDev?: number;
+  deltaAvgWaitTimeCI?: [number, number];
+  isWaitTimeSignificant?: boolean;
+  baselineMeanWaitTime?: number;
+  scenarioMeanWaitTime?: number;
   pctChangeAvgWaitTime: number;
 
   deltaAvgTravelTime: number;
   deltaAvgTravelTimeStdDev?: number;
+  deltaAvgTravelTimeCI?: [number, number];
+  isTravelTimeSignificant?: boolean;
+  baselineMeanTravelTime?: number;
+  scenarioMeanTravelTime?: number;
   pctChangeAvgTravelTime: number;
 
   deltaThroughput: number;
   deltaThroughputStdDev?: number;
+  deltaThroughputCI?: [number, number];
+  isThroughputSignificant?: boolean;
+  baselineMeanThroughput?: number;
+  scenarioMeanThroughput?: number;
   pctChangeThroughput: number;
 
   deltaAvgSpeed: number;
   deltaAvgSpeedStdDev?: number;
+  deltaAvgSpeedCI?: [number, number];
+  isSpeedSignificant?: boolean;
+  baselineMeanSpeed?: number;
+  scenarioMeanSpeed?: number;
 
   deltaCompleted: number;
   deltaCompletedStdDev?: number;
+  deltaCompletedCI?: [number, number];
+  isCompletedSignificant?: boolean;
+  baselineMeanCompleted?: number;
+  scenarioMeanCompleted?: number;
 
   deltaSpawned: number;
   deltaMaxQueue: number;

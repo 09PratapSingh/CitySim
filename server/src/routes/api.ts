@@ -19,6 +19,7 @@ import {
   compareSimulations,
   listRuns,
   getRun,
+  generateSummaryReport,
 } from '../controllers/simulationController.ts';
 
 const router = Router();
@@ -49,7 +50,6 @@ router.delete('/scenarios/:id', deleteScenario);
 // Simulation execution and history routes
 router.post('/simulations/run', runHeadlessSimulation);
 router.post('/simulations/compare', compareSimulations);
+router.post('/simulations/reports/summary', generateSummaryReport);
 router.get('/simulations/runs', listRuns);
-router.get('/simulations/runs/:id', getRun);
-
-export default router;
+r

@@ -16,6 +16,7 @@ const ScenarioSchema = new Schema<IScenarioDocument>(
       signalOverrides: { type: [Schema.Types.Mixed], default: [] },
       speedLimitOverrides: { type: [Schema.Types.Mixed], default: [] },
     },
+    odPairs: { type: [Schema.Types.Mixed], default: [] },
   },
   {
     timestamps: true,

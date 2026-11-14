@@ -70,6 +70,18 @@ export interface Vehicle {
   /** Total distance traveled across all segments (in meters) */
   totalDistanceTravelled: number;
 
+  /** Ordered sequence of edge IDs forming the vehicle's path to destination */
+  routeEdgeIds?: string[];
+
+  /** Current index in routeEdgeIds */
+  routeIndex?: number;
+
+  /** Origin node where vehicle entered network */
+  originNodeId?: string;
+
+  /** Destination node where vehicle will exit network */
+  destinationNodeId?: string;
+
   /** Lifecycle state */
   state: 'active' | 'completed';
 
@@ -99,9 +111,31 @@ export interface RoadSegment {
   /** Whether the road is one-way */
   isOneWay: boolean;
 
+  /** Whether the road is currently closed (e.g. road closure scenario) */
+  isClosed?: boolean;
+
   /** Visual coordinates for 2D rendering */
   startCoord?: Vector2D;
   endCoord?: Vector2D;
+}
+
+export type RouteCriterion = 'distance' | 'travel_time';
+
+export interface RouteResult {
+  /** Ordered list of node IDs visited along the route */
+  nodePath: string[];
+
+  /** Ordered list of road edge IDs traversed */
+  edgePath: string[];
+
+  /** Cumulative physical path distance in meters */
+  totalDistance: number;
+
+  /** Cumulative free-flow travel time in seconds (sum of length / speedLimit) */
+  estimatedFreeFlowTime: number;
+
+  /** Number of nodes expanded during graph search (for algorithm performance evaluation) */
+  visitedNodesCount: number;
 }
 
 export interface IntersectionNode {

@@ -117,3 +117,46 @@ This document records the critical architectural, algorithmic, and engineering d
   - *Deterministic constant interval ($t_{arrival} = 1/\lambda$):* Unrealistic; creates artificial platoons with zero natural queuing variations.
   - *Uniform random jitter:* Lacks theoretical backing in queuing theory.
 - **Viva Defense Note:** The Poisson arrival process ($M/M/1$ or $M/G/1$ queue) is the standard in queuing theory and civil transportation engineering, showing examiners a strong mathematical foundation.
+
+---
+
+## ADR 010: Admissible Heuristic Formulation for A* Routing
+
+- **Status:** Accepted (Stage 2)
+- **Context:** When searching a road graph for the fastest route, A* requires an admissible heuristic $h(n)$ (one that never overestimates the true remaining cost to the destination) to guarantee finding the mathematically optimal path.
+- **Decision:** Formulate the heuristic based on the routing criterion:
+  1. **Distance Criterion:** Straight-line Euclidean distance:
+     $$h_{dist}(n) = \sqrt{(x_n - x_{dest})^2 + (y_n - y_{dest})^2}$$
+  2. **Travel Time Criterion:** Euclidean distance divided by the network maximum speed limit:
+     $$h_{time}(n) = \frac{\sqrt{(x_n - x_{dest})^2 + (y_n - y_{dest})^2}}{\max_{e \in E} (\text{speedLimit}(e))}$$
+- **Alternatives Rejected:**
+  - *Manhattan distance ($|dx| + |dy|$):* Not admissible when roads run diagonally or Euclidean curvature exists (can overestimate distance).
+  - *Dividing by local edge speed limit:* If the remaining path has a faster road, local speed would underestimate time, violating consistency.
+- **Viva Defense Note:** Dividing straight-line distance by the maximum possible velocity ensures $h(n) \le \text{true travel time}$ under all physical conditions, proving mathematical admissibility and optimality in your viva presentation.
+
+---
+
+## ADR 011: Road Closure Impairment Modeling via Dynamic Edge Invalidation
+
+- **Status:** Accepted (Stage 2)
+- **Context:** In scenario testing, urban planners need to test the impact of closing a road segment (due to construction, disaster, or pedestrianization).
+- **Decision:** Road closures are represented by an `isClosed` boolean flag on the directed edge. When an edge is closed:
+  1. The pathfinding algorithms (A* and Dijkstra) ignore the edge ($cost = \infty$), computing alternative detour paths.
+  2. If a vehicle already en route approaches an unexpectedly closed downstream edge, it initiates a local dynamic reroute from its current intersection node.
+- **Alternatives Rejected:**
+  - *Physically deleting edges from the graph:* Destroys the base map geometry, making before/after comparisons and UI synchronization complex and error-prone.
+- **Viva Defense Note:** Preserves map topology and immutability while cleanly modeling dynamic environmental disruptions.
+
+---
+
+## ADR 012: Multi-Lane Partitioning and Greedy Entry Load Balancing
+
+- **Status:** Accepted (Stage 2)
+- **Context:** Real roads frequently have multiple parallel lanes ($lanes \ge 2$). Vehicles must choose lanes and follow vehicles within their specific lane.
+- **Decision:**
+  1. On each multi-lane road edge, vehicles are indexed by `laneIndex`.
+  2. Each lane executes independent car-following physics (vehicles interact only with leaders in the same lane).
+  3. When vehicles enter a multi-lane road, they select the lane with the lowest current vehicle count (greedy load balancing).
+- **Alternatives Rejected:**
+  - *Full MOBIL lane-changing model:* High computational complexity and prone to lane-switching chatter without adding proportional value to macroscopic travel time metrics.
+- **Viva Defense Note:** Provides realistic multi-lane capacity and queuing without excessive simulation overhead, easily explainable as greedy capacity distribution.

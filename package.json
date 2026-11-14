@@ -11,7 +11,8 @@
   ],
   "scripts": {
     "test:engine": "npm --prefix engine test",
-    "demo:stage1": "node --experimental-strip-types engine/demo.ts"
+    "demo:stage1": "node --experimental-strip-types engine/demo.ts",
+    "demo:stage2": "node --experimental-strip-types engine/demoStage2.ts"
   },
   "keywords": [
     "traffic-simulation",

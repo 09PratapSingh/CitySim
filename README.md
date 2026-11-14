@@ -1,20 +1,20 @@
 # CitySim – Traffic Scenario Testing Platform
 
-> **Status:** Stage 1 Completed (Engine Core & Single Intersection Simulation)
+> **Status:** Stage 2 Completed (Multi-Road Graph Network & A* Routing)
 
 CitySim is an interactive web-based traffic simulation and scenario testing platform designed for urban planners, transportation engineers, and academic evaluation. The system allows users to design 2D road networks, configure signal control strategies, simulate microscopic vehicle behavior using deterministic time-stepped models, and evaluate the impact of infrastructure changes (such as road closures, signal timing optimizations, or adaptive signal controllers) through side-by-side "before vs. after" comparative analytics and exported reports.
 
 ---
 
-## Current Status: Stage 1 Completed
-- [x] Deterministic Mulberry32 Seeded PRNG (`engine/src/prng.ts`)
-- [x] Intelligent Driver Model (IDM) car-following physics (`engine/src/carFollowing.ts`)
-- [x] Semi-implicit Euler numerical integration (no position overshoot, no negative velocities)
-- [x] Single intersection discrete time-step simulation engine (`engine/src/simulation.ts`)
-- [x] Virtual stop line obstacle for smooth red light stopping
-- [x] Real-time metrics calculation (Travel Time, Wait Time / Delay, Queue Length, Throughput)
-- [x] 15 passing unit tests across all engine components (`engine/test/*.test.ts`)
-- [x] Interactive ASCII CLI demo (`engine/demo.ts`)
+## Current Status: Stage 2 Completed
+- [x] **Deterministic PRNG:** Seeded Mulberry32 generator (`engine/src/prng.ts`)
+- [x] **Car-Following Physics:** IDM with Semi-implicit Euler integration (`engine/src/carFollowing.ts`)
+- [x] **Road Network Graph:** Directed Graph $G=(V,E)$ supporting one-way and two-way roads (`engine/src/graph.ts`)
+- [x] **Pathfinding Algorithms:** Dijkstra & A* with admissible Euclidean distance/travel-time heuristics (`engine/src/routing.ts`)
+- [x] **Network Simulation:** Multi-edge corridor navigation, multi-lane load balancing, dynamic detour rerouting (`engine/src/networkSimulation.ts`)
+- [x] **Scenario Testing:** Road closure toggling with automated detour routing and delta metrics
+- [x] **Testing:** 29 automated unit tests passing across all components (`npm --prefix engine test`)
+- [x] **Interactive Demos:** Stage 1 single-intersection CLI demo (`npm run demo:stage1`) & Stage 2 A* detour CLI demo (`npm run demo:stage2`)
 
 ---
 
@@ -88,11 +88,14 @@ CitySim/
 - npm or pnpm
 - MongoDB (Local instance or MongoDB Atlas URI)
 
-### Quickstart (Running Stage 1)
+### Quickstart (Running Stages 1 & 2)
 ```bash
-# 1. Run unit tests for the simulation engine
+# 1. Run unit tests for the simulation engine (29 tests)
 npm --prefix engine test
 
-# 2. Run the interactive single-intersection CLI demo
+# 2. Run the interactive single-intersection CLI demo (Stage 1)
 npm run demo:stage1
+
+# 3. Run the multi-road A* routing & road closure detour demo (Stage 2)
+npm run demo:stage2
 ```

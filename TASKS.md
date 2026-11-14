@@ -17,14 +17,14 @@ This checklist tracks the stage-wise progress of the **CitySim: Traffic Scenario
 ---
 
 ## Stage 2: Road Network Graph & Routing
-- [ ] 2.1 Implement Directed Graph data structure (`Graph`, `Node`, `Edge`).
-- [ ] 2.2 Support multi-lane segments, road lengths, speed limits, and directional edges (one-way vs two-way).
-- [ ] 2.3 Implement Dijkstra's algorithm for shortest-path calculation based on distance and travel time.
-- [ ] 2.4 Implement A* search algorithm using Euclidean distance heuristic for efficient grid routing.
-- [ ] 2.5 Implement multi-edge vehicle path following (transitioning across nodes to successor edges).
-- [ ] 2.6 Handle lane-changing logic or lane assignment within multi-lane edges.
-- [ ] 2.7 Add unit tests for network graph construction, disconnected components, and Dijkstra / A* route correctness.
-- [ ] 2.8 Stage 2 verification demo script.
+- [x] 2.1 Implement Directed Graph data structure (`Graph`, `Node`, `Edge`).
+- [x] 2.2 Support multi-lane segments, road lengths, speed limits, and directional edges (one-way vs two-way).
+- [x] 2.3 Implement Dijkstra's algorithm for shortest-path calculation based on distance and travel time.
+- [x] 2.4 Implement A* search algorithm using Euclidean distance heuristic for efficient grid routing.
+- [x] 2.5 Implement multi-edge vehicle path following (transitioning across nodes to successor edges).
+- [x] 2.6 Handle lane-changing logic or lane assignment within multi-lane edges.
+- [x] 2.7 Add unit tests for network graph construction, disconnected components, and Dijkstra / A* route correctness.
+- [x] 2.8 Stage 2 verification demo script.
 
 ---
 

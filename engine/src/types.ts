@@ -138,6 +138,38 @@ export interface RouteResult {
   visitedNodesCount: number;
 }
 
+export type SignalState = 'GREEN' | 'YELLOW' | 'RED' | 'ALL_RED';
+
+export interface SignalPhase {
+  id: string;
+  name: string;
+  /** Road edge IDs that receive green during this phase */
+  greenEdgeIds: string[];
+  /** Green interval duration in seconds */
+  greenDuration: number;
+  /** Amber/yellow clearance interval duration in seconds (default 3s) */
+  yellowDuration?: number;
+  /** All-red junction clearance interval duration in seconds (default 1.5s) */
+  allRedDuration?: number;
+}
+
+export interface AdaptiveSignalParams {
+  /** Minimum guaranteed green time before phase can switch (seconds) */
+  minGreen: number;
+  /** Maximum allowable green time before forced phase termination (seconds) */
+  maxGreen: number;
+  /** Duration added when active approach has continuing queue demand (seconds) */
+  extensionSeconds: number;
+  /** Number of vehicles queued to qualify for extension */
+  queueThreshold: number;
+}
+
+export interface SignalConfig {
+  type: 'fixed_signal' | 'adaptive_signal';
+  phases: SignalPhase[];
+  adaptiveParams?: AdaptiveSignalParams;
+}
+
 export interface IntersectionNode {
   /** Unique node identifier */
   id: string;
@@ -154,6 +186,9 @@ export interface IntersectionNode {
 
   /** List of outgoing road IDs */
   outgoingEdgeIds: string[];
+
+  /** Signal configuration when controlType is fixed_signal or adaptive_signal */
+  signalConfig?: SignalConfig;
 }
 
 export interface SimulationConfig {

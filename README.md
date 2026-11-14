@@ -1,20 +1,22 @@
 # CitySim – Traffic Scenario Testing Platform
 
-> **Status:** Stage 2 Completed (Multi-Road Graph Network & A* Routing)
+> **Status:** Stage 3 Completed (Traffic Signals & Adaptive Scheduling)
 
 CitySim is an interactive web-based traffic simulation and scenario testing platform designed for urban planners, transportation engineers, and academic evaluation. The system allows users to design 2D road networks, configure signal control strategies, simulate microscopic vehicle behavior using deterministic time-stepped models, and evaluate the impact of infrastructure changes (such as road closures, signal timing optimizations, or adaptive signal controllers) through side-by-side "before vs. after" comparative analytics and exported reports.
 
 ---
 
-## Current Status: Stage 2 Completed
+## Current Status: Stage 3 Completed
 - [x] **Deterministic PRNG:** Seeded Mulberry32 generator (`engine/src/prng.ts`)
 - [x] **Car-Following Physics:** IDM with Semi-implicit Euler integration (`engine/src/carFollowing.ts`)
 - [x] **Road Network Graph:** Directed Graph $G=(V,E)$ supporting one-way and two-way roads (`engine/src/graph.ts`)
 - [x] **Pathfinding Algorithms:** Dijkstra & A* with admissible Euclidean distance/travel-time heuristics (`engine/src/routing.ts`)
 - [x] **Network Simulation:** Multi-edge corridor navigation, multi-lane load balancing, dynamic detour rerouting (`engine/src/networkSimulation.ts`)
-- [x] **Scenario Testing:** Road closure toggling with automated detour routing and delta metrics
-- [x] **Testing:** 29 automated unit tests passing across all components (`npm --prefix engine test`)
-- [x] **Interactive Demos:** Stage 1 single-intersection CLI demo (`npm run demo:stage1`) & Stage 2 A* detour CLI demo (`npm run demo:stage2`)
+- [x] **Signal State Machine:** Multi-phase cyclical FSM with Yellow and All-Red clearance intervals (`engine/src/signals.ts`)
+- [x] **Signal Controllers:** Fixed-Time (pre-timed) & Adaptive (Queue-responsive green extension with starvation bounds)
+- [x] **Junction Safety:** Dilemma Zone stopping logic and "Don't Block the Box" spillback gridlock prevention
+- [x] **Testing:** 34 automated unit tests passing across all components (`npm --prefix engine test`)
+- [x] **Interactive Demos:** Stage 1 (`demo:stage1`), Stage 2 (`demo:stage2`), and Stage 3 Adaptive Signal demo (`demo:stage3`)
 
 ---
 
@@ -88,9 +90,9 @@ CitySim/
 - npm or pnpm
 - MongoDB (Local instance or MongoDB Atlas URI)
 
-### Quickstart (Running Stages 1 & 2)
+### Quickstart (Running Stages 1, 2 & 3)
 ```bash
-# 1. Run unit tests for the simulation engine (29 tests)
+# 1. Run unit tests for the simulation engine (34 tests)
 npm --prefix engine test
 
 # 2. Run the interactive single-intersection CLI demo (Stage 1)
@@ -98,4 +100,7 @@ npm run demo:stage1
 
 # 3. Run the multi-road A* routing & road closure detour demo (Stage 2)
 npm run demo:stage2
+
+# 4. Run the Fixed-Time vs. Adaptive Signal comparison demo (Stage 3)
+npm run demo:stage3
 ```

@@ -29,13 +29,13 @@ This checklist tracks the stage-wise progress of the **CitySim: Traffic Scenario
 ---
 
 ## Stage 3: Traffic Signals & Scheduling
-- ⬜ 3.1 Define Signal state machine: `GREEN`, `YELLOW`, `RED`, `ALL_RED_CLEARANCE`.
-- ⬜ 3.2 Implement Fixed-Time Phase Controller with configurable cycle times, green splits, and amber durations.
-- ⬜ 3.3 Implement Adaptive Queue-Responsive Signal Controller (green-time extension based on incoming lane queue lengths and minimum/maximum green bounds).
-- ⬜ 3.4 Integrate signal phase state with vehicle stopping behavior (right-of-way check at stop line).
-- ⬜ 3.5 Prevent vehicle gridlock and conflict point collisions inside intersection boxes.
-- ⬜ 3.6 Add unit tests for signal phase cycles, clearance intervals, and adaptive timing extensions under asymmetrical loads.
-- ⬜ 3.7 Stage 3 verification demo script.
+- ✅ 3.1 Define Signal state machine: `GREEN`, `YELLOW`, `RED`, `ALL_RED_CLEARANCE`.
+- ✅ 3.2 Implement Fixed-Time Phase Controller with configurable cycle times, green splits, and amber durations.
+- ✅ 3.3 Implement Adaptive Queue-Responsive Signal Controller (green-time extension based on incoming lane queue lengths and minimum/maximum green bounds).
+- ✅ 3.4 Integrate signal phase state with vehicle stopping behavior (right-of-way check at stop line).
+- ✅ 3.5 Prevent vehicle gridlock and conflict point collisions inside intersection boxes.
+- ✅ 3.6 Add unit tests for signal phase cycles, clearance intervals, and adaptive timing extensions under asymmetrical loads.
+- ✅ 3.7 Stage 3 verification demo script.
 
 ---
 

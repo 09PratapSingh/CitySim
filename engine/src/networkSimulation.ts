@@ -1,13 +1,15 @@
 /**
  * Multi-Road Network Microscopic Simulation Engine.
  * 
- * CORE RESPONSIBILITY FOR STAGE 2:
+ * CORE RESPONSIBILITY FOR STAGE 2 & 3:
  * Simulates microscopic vehicle movement across an arbitrary directed graph network.
  * Features:
  * - A* / Dijkstra based Origin-to-Destination (O-D) routing.
  * - Multi-edge path progression and intersection traversal.
  * - Multi-lane road segment support with lane assignment.
  * - Dynamic detour routing when roads are closed (Scenario testing).
+ * - Fixed-time and Adaptive queue-responsive traffic signal controllers.
+ * - "Don't block the box" spillback prevention to prevent intersection gridlock.
  * - Comprehensive network-wide metrics and road-level congestion indexes.
  */
 
@@ -15,6 +17,10 @@ import { PRNG } from './prng.ts';
 import { RoadGraph } from './graph.ts';
 import { Router } from './routing.ts';
 import { CarFollowingModel, type LeaderObstacle } from './carFollowing.ts';
+import {
+  TrafficSignalController,
+  SignalControllerFactory,
+} from './signals.ts';
 import type {
   Vehicle,
   RoadSegment,
@@ -22,6 +28,7 @@ import type {
   SimulationConfig,
   SimulationMetrics,
   RouteResult,
+  SignalState,
 } from './types.ts';
 
 export interface ODPair {
@@ -48,7 +55,10 @@ export class NetworkSimulation {
   // Key: `${originNodeId}->${destinationNodeId}`, Value: next spawn timestamp
   private nextSpawnTimes: Map<string, number> = new Map();
 
-  // Control state: key is edgeId, value is boolean (true = green/open, false = red/closed)
+  // Traffic Signal Controllers mapped by Node ID
+  private signalControllers: Map<string, TrafficSignalController> = new Map();
+
+  // Manual stop-line fallback state: key is edgeId, value is boolean (true = open, false = closed)
   private stopLineOpen: Map<string, boolean> = new Map();
 
   // Vehicles
@@ -79,9 +89,57 @@ export class NetworkSimulation {
       this.stopLineOpen.set(edge.id, true);
     }
 
+    // Auto-discover and initialize signal controllers from graph nodes
+    this.initSignalControllers();
+
     if (options.odPairs && options.odPairs.length > 0) {
       this.setODPairs(options.odPairs);
     }
+  }
+
+  /**
+   * Initializes signal controllers from the graph's intersection configurations.
+   */
+  private initSignalControllers(): void {
+    for (const node of this.graph.getAllNodes()) {
+      if (node.controlType === 'fixed_signal' || node.controlType === 'adaptive_signal') {
+        const controller = SignalControllerFactory.create(node);
+        if (controller) {
+          this.signalControllers.set(node.id, controller);
+        }
+      }
+    }
+  }
+
+  /**
+   * Attaches or overrides a signal controller for a specific intersection node.
+   */
+  public addSignalController(controller: TrafficSignalController): void {
+    this.signalControllers.set(controller.nodeId, controller);
+  }
+
+  public getSignalController(nodeId: string): TrafficSignalController | undefined {
+    return this.signalControllers.get(nodeId);
+  }
+
+  public getAllSignalControllers(): TrafficSignalController[] {
+    return Array.from(this.signalControllers.values());
+  }
+
+  /**
+   * Returns current signal aspect for an edge ('GREEN' | 'YELLOW' | 'RED' | 'ALL_RED').
+   */
+  public getSignalStateForEdge(edgeId: string): SignalState {
+    const edge = this.graph.getEdge(edgeId);
+    if (!edge) return 'GREEN';
+
+    const controller = this.signalControllers.get(edge.toNodeId);
+    if (controller) {
+      return controller.getEdgeSignalState(edgeId);
+    }
+
+    // Unsignalized or manual override
+    return this.stopLineOpen.get(edgeId) ?? true ? 'GREEN' : 'RED';
   }
 
   /**
@@ -110,7 +168,8 @@ export class NetworkSimulation {
   }
 
   public getStopLineState(edgeId: string): boolean {
-    return this.stopLineOpen.get(edgeId) ?? true;
+    const state = this.getSignalStateForEdge(edgeId);
+    return state === 'GREEN';
   }
 
   /**
@@ -119,16 +178,19 @@ export class NetworkSimulation {
   public tick(): void {
     const dt = this.config.timeStep;
 
-    // 1. Spawn new vehicles according to OD Poisson rates and A* routing
+    // 1. Advance traffic signal controllers and update phases
+    this.updateSignals(dt);
+
+    // 2. Spawn new vehicles according to OD Poisson rates and A* routing
     this.spawnVehicles();
 
-    // 2. Update microscopic physics (IDM) per road edge and per lane
+    // 3. Update microscopic physics (IDM) per road edge and per lane
     this.updateVehicleDynamics(dt);
 
-    // 3. Handle multi-edge transitions across intersection nodes and trip completions
+    // 4. Handle multi-edge transitions across intersection nodes and trip completions
     this.handleTransitions();
 
-    // 4. Update queue metrics
+    // 5. Update queue metrics
     this.updateQueueMetrics();
 
     // Advance clock
@@ -141,6 +203,25 @@ export class NetworkSimulation {
   public step(count: number = 1): void {
     for (let i = 0; i < count; i++) {
       this.tick();
+    }
+  }
+
+  /**
+   * Updates all intersection signal controllers with real-time queue feedback.
+   */
+  private updateSignals(dt: number): void {
+    // Gather current queue lengths per approach for adaptive controllers
+    const incomingQueues = new Map<string, number>();
+    for (const edge of this.graph.getAllEdges()) {
+      const q = this.activeVehicles.filter(
+        (v) => v.currentEdgeId === edge.id && v.velocity < 0.5
+      ).length;
+      incomingQueues.set(edge.id, q);
+    }
+
+    // Step each signal controller forward
+    for (const controller of this.signalControllers.values()) {
+      controller.update(dt, incomingQueues);
     }
   }
 
@@ -280,7 +361,6 @@ export class NetworkSimulation {
    */
   private updateVehicleDynamics(dt: number): void {
     // Partition vehicles by edgeId and laneIndex
-    // Key: `${edgeId}#${laneIndex}`
     const vehiclesByLane = new Map<string, Vehicle[]>();
 
     for (const v of this.activeVehicles) {
@@ -302,7 +382,7 @@ export class NetworkSimulation {
       // Sort descending by position (furthest along the lane is leader)
       laneVehicles.sort((a, b) => b.position - a.position);
 
-      const isStopLineOpen = this.stopLineOpen.get(edgeId) ?? true;
+      const signalAspect = this.getSignalStateForEdge(edgeId);
 
       for (let i = 0; i < laneVehicles.length; i++) {
         const vehicle = laneVehicles[i];
@@ -316,13 +396,43 @@ export class NetworkSimulation {
             velocity: leadVehicle.velocity,
             length: leadVehicle.length,
           };
-        } else if (!isStopLineOpen) {
-          // First car in lane facing a red signal or stop bar at the end of the edge
-          leaderObstacle = {
-            position: edge.length,
-            velocity: 0,
-            length: 0,
-          };
+        } else {
+          // First car in lane approaching the intersection stop bar
+          let shouldHaltAtStopBar = false;
+
+          if (signalAspect === 'RED' || signalAspect === 'ALL_RED') {
+            shouldHaltAtStopBar = true;
+          } else if (signalAspect === 'YELLOW') {
+            // Dilemma zone evaluation:
+            // Stopping distance d_stop = v^2 / (2 * b)
+            const dStop = (vehicle.velocity * vehicle.velocity) / (2 * vehicle.desiredDeceleration);
+            const dRemaining = edge.length - vehicle.position;
+            // If vehicle can stop comfortably without harsh emergency deceleration, it halts
+            if (dRemaining > dStop && dRemaining > 6.0) {
+              shouldHaltAtStopBar = true;
+            }
+          }
+
+          // Don't Block the Box rule:
+          // If signal is GREEN or YELLOW, but the downstream exit road is full, do not enter the intersection!
+          if (!shouldHaltAtStopBar && (signalAspect === 'GREEN' || signalAspect === 'YELLOW')) {
+            const route = vehicle.routeEdgeIds ?? [];
+            const currentIdx = vehicle.routeIndex ?? 0;
+            if (currentIdx < route.length - 1) {
+              const nextEdgeId = route[currentIdx + 1];
+              if (!this.isExitClearForEntry(nextEdgeId)) {
+                shouldHaltAtStopBar = true;
+              }
+            }
+          }
+
+          if (shouldHaltAtStopBar) {
+            leaderObstacle = {
+              position: edge.length,
+              velocity: 0,
+              length: 0,
+            };
+          }
         }
 
         const acc = CarFollowingModel.calculateAcceleration(
@@ -334,6 +444,22 @@ export class NetworkSimulation {
         CarFollowingModel.integrate(vehicle, acc, dt);
       }
     }
+  }
+
+  /**
+   * Checks if an outgoing road has room for an entering vehicle (anti-gridlock check).
+   */
+  private isExitClearForEntry(edgeId: string): boolean {
+    const edge = this.graph.getEdge(edgeId);
+    if (!edge) return true;
+
+    // Check if vehicles are queued right at the beginning of the road segment
+    const vehiclesNearEntry = this.activeVehicles.filter(
+      (v) => v.currentEdgeId === edgeId && v.position < 12.0 && v.velocity < 1.0
+    );
+
+    // If all lanes at the entry are occupied by stationary cars, exit is blocked
+    return vehiclesNearEntry.length < edge.lanes;
   }
 
   /**
@@ -354,13 +480,14 @@ export class NetworkSimulation {
 
         if (currentIdx < route.length - 1) {
           // Vehicle wants to advance to the next edge in its route
-          const isStopLineOpen = this.stopLineOpen.get(edge.id) ?? true;
+          const signalAspect = this.getSignalStateForEdge(edge.id);
+          const isPermitted = signalAspect === 'GREEN' || signalAspect === 'YELLOW';
 
-          if (isStopLineOpen) {
+          if (isPermitted) {
             const nextEdgeId = route[currentIdx + 1];
             const nextEdge = this.graph.getEdge(nextEdgeId);
 
-            if (nextEdge && !nextEdge.isClosed) {
+            if (nextEdge && !nextEdge.isClosed && this.isExitClearForEntry(nextEdgeId)) {
               // Advance to next edge
               const overshoot = vehicle.position - edge.length;
               vehicle.currentEdgeId = nextEdgeId;
@@ -370,8 +497,8 @@ export class NetworkSimulation {
               // Assign to least crowded lane on the new edge
               vehicle.laneIndex = this.selectEntryLane(nextEdge);
               remainingActive.push(vehicle);
-            } else {
-              // Next edge is closed! Dynamic detour reroute from current node
+            } else if (nextEdge && nextEdge.isClosed) {
+              // Next edge is closed: dynamic detour reroute from current node
               const currentNodeId = edge.toNodeId;
               const newRoute = Router.astar(
                 this.graph,
@@ -392,11 +519,15 @@ export class NetworkSimulation {
                 vehicle.laneIndex = this.selectEntryLane(reroutedNextEdge);
                 remainingActive.push(vehicle);
               } else {
-                // Completely trapped/nowhere to go
                 vehicle.position = edge.length;
                 vehicle.velocity = 0;
                 remainingActive.push(vehicle);
               }
+            } else {
+              // Downstream intersection exit is blocked (gridlock prevention hold)
+              vehicle.position = edge.length;
+              vehicle.velocity = 0;
+              remainingActive.push(vehicle);
             }
           } else {
             // Red light: hold position at stop line
@@ -492,7 +623,6 @@ export class NetworkSimulation {
 
   /**
    * Returns road-level congestion index (Volume-to-Capacity ratio proxy).
-   * Used for rendering the congestion heatmap in the UI.
    */
   public getCongestionMap(): Record<string, { vehicleCount: number; densityRatio: number; averageSpeed: number }> {
     const map: Record<string, { vehicleCount: number; densityRatio: number; averageSpeed: number }> = {};
@@ -501,7 +631,6 @@ export class NetworkSimulation {
       const vehs = this.activeVehicles.filter((v) => v.currentEdgeId === edge.id);
       const vehicleCount = vehs.length;
 
-      // Approximate maximum capacity = (road length / jam distance) * lanes
       const maxStorageCapacity = (edge.length / (this.config.defaultJamDistance! + this.config.defaultVehicleLength!)) * edge.lanes;
       const densityRatio = maxStorageCapacity > 0 ? Math.min(1.0, vehicleCount / maxStorageCapacity) : 0;
 

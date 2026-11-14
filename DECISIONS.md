@@ -160,3 +160,44 @@ This document records the critical architectural, algorithmic, and engineering d
 - **Alternatives Rejected:**
   - *Full MOBIL lane-changing model:* High computational complexity and prone to lane-switching chatter without adding proportional value to macroscopic travel time metrics.
 - **Viva Defense Note:** Provides realistic multi-lane capacity and queuing without excessive simulation overhead, easily explainable as greedy capacity distribution.
+
+---
+
+## ADR 013: Signal Phase State Machine with All-Red Clearance Interval
+
+- **Status:** Accepted (Stage 3)
+- **Context:** Intersections manage non-conflicting movements through cyclical phases. Abrupt switches between Green and Red cause collisions or sudden stopping.
+- **Decision:** Model signal transitions as a 4-state cyclical state machine per phase:
+  $$\text{GREEN} \longrightarrow \text{YELLOW } (3.0\text{s}) \longrightarrow \text{ALL\_RED } (1.5\text{s}) \longrightarrow \text{NEXT PHASE GREEN}$$
+  During the `ALL_RED` interval, all incoming approaches display a physical RED light, clearing the conflict zone before cross-traffic receives legal right-of-way.
+- **Alternatives Rejected:**
+  - *Instant 2-state toggle (Green/Red only):* Completely unrealistic; creates high-speed perpendicular collisions inside intersection boxes.
+- **Viva Defense Note:** Mimics standard MUTCD (Manual on Uniform Traffic Control Devices) safety engineering standards, protecting physical realism.
+
+---
+
+## ADR 014: Adaptive Queue-Actuated Green Extension with Starvation Ceiling
+
+- **Status:** Accepted (Stage 3)
+- **Context:** Fixed-time signals waste green time on empty approaches while cross-streets build long queues.
+- **Decision:** Implement an actuated adaptive controller:
+  1. Guaranteed `minGreen` ($8-10\text{s}$).
+  2. After `minGreen`, inspect queue detector inputs. If active queue $\ge \text{threshold}$, extend green in increments of $\Delta t_{ext} = 3\text{s}$.
+  3. If active queue drops to zero, terminate green immediately.
+  4. Force termination at `maxGreen` ($40-50\text{s}$) regardless of active queue to prevent cross-street starvation.
+- **Alternatives Rejected:**
+  - *Complex deep reinforcement learning (RL) signals:* Black box, non-deterministic, difficult to explain in an undergraduate viva, and impossible to unit-test deterministically.
+- **Viva Defense Note:** Queue-actuation is the basis of real-world traffic systems like SCOOT and SCATS. It provides predictable, explainable, and mathematically bounded optimization.
+
+---
+
+## ADR 015: Dilemma Zone Handling and "Don't Block the Box" Gridlock Prevention
+
+- **Status:** Accepted (Stage 3)
+- **Context:** Real-world traffic suffers from two major junction phenomena: drivers unable to stop at yellow (the Dilemma Zone) and drivers entering full intersections and causing gridlock.
+- **Decision:**
+  1. **Dilemma Zone:** A vehicle approaching on Yellow computes its stopping distance $d_{stop} = \frac{v^2}{2b}$. If remaining distance $d_{rem} > d_{stop}$, it halts; if $d_{rem} \le d_{stop}$, it proceeds safely through the intersection.
+  2. **Don't Block the Box:** Even when a signal is GREEN or YELLOW, if the downstream exit road is full/queued up to the boundary, vehicles are prohibited from entering the intersection box.
+- **Alternatives Rejected:**
+  - *Allowing vehicles to enter full exits:* Causes total gridlock where orthogonal cross-traffic is permanently blocked on green phases.
+- **Viva Defense Note:** Demonstrates deep domain understanding of civil traffic management and defensive software engineering.

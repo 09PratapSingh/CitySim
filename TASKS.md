@@ -40,17 +40,17 @@ This checklist tracks the stage-wise progress of the **CitySim: Traffic Scenario
 ---
 
 ## Stage 4: Traffic Generation & Performance Metrics
-- ⬜ 4.1 Implement Poisson Arrival Generator for synthetic vehicle injection based on arrival rate ($\lambda$ vehicles/hour).
-- ⬜ 4.2 Support Origin-Destination (O-D) matrix for trip distribution across boundary nodes.
-- ⬜ 4.3 Implement vehicle lifecycle tracker: spawn, in-transit, stopped/delayed, arrival at destination.
-- ⬜ 4.4 Implement real-time metrics collector:
+- ✅ 4.1 Implement Poisson Arrival Generator for synthetic vehicle injection based on arrival rate ($\lambda$ vehicles/hour).
+- ✅ 4.2 Support Origin-Destination (O-D) matrix for trip distribution across boundary nodes.
+- ✅ 4.3 Implement vehicle lifecycle tracker: spawn, in-transit, stopped/delayed, arrival at destination.
+- ✅ 4.4 Implement real-time metrics collector:
   - Average travel time (seconds)
   - Average stopped delay / wait time (seconds)
   - Total network throughput (vehicles completed / simulated hour)
   - Maximum & average queue length per intersection approach
   - Road segment congestion index / volume-to-capacity ratio (for heatmaps)
-- ⬜ 4.5 Add unit tests for metrics math, Poisson distribution sampling accuracy, and throughput conservation.
-- ⬜ 4.6 Stage 4 verification demo script.
+- ✅ 4.5 Add unit tests for metrics math, Poisson distribution sampling accuracy, and throughput conservation.
+- ✅ 4.6 Stage 4 verification demo script.
 
 ---
 

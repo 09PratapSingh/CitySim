@@ -5,4 +5,6 @@ export * from './simulation.ts';
 export * from './graph.ts';
 export * from './routing.ts';
 export * from './signals.ts';
+export * from './trafficGenerator.ts';
+export * from './metrics.ts';
 export * from './networkSimulation.ts';

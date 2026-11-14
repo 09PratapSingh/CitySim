@@ -1,22 +1,21 @@
 # CitySim – Traffic Scenario Testing Platform
 
-> **Status:** Stage 3 Completed (Traffic Signals & Adaptive Scheduling)
+> **Status:** Stage 4 Completed (Traffic Generation & Performance Metrics)
 
 CitySim is an interactive web-based traffic simulation and scenario testing platform designed for urban planners, transportation engineers, and academic evaluation. The system allows users to design 2D road networks, configure signal control strategies, simulate microscopic vehicle behavior using deterministic time-stepped models, and evaluate the impact of infrastructure changes (such as road closures, signal timing optimizations, or adaptive signal controllers) through side-by-side "before vs. after" comparative analytics and exported reports.
 
 ---
 
-## Current Status: Stage 3 Completed
+## Current Status: Stage 4 Completed
 - [x] **Deterministic PRNG:** Seeded Mulberry32 generator (`engine/src/prng.ts`)
 - [x] **Car-Following Physics:** IDM with Semi-implicit Euler integration (`engine/src/carFollowing.ts`)
 - [x] **Road Network Graph:** Directed Graph $G=(V,E)$ supporting one-way and two-way roads (`engine/src/graph.ts`)
 - [x] **Pathfinding Algorithms:** Dijkstra & A* with admissible Euclidean distance/travel-time heuristics (`engine/src/routing.ts`)
-- [x] **Network Simulation:** Multi-edge corridor navigation, multi-lane load balancing, dynamic detour rerouting (`engine/src/networkSimulation.ts`)
-- [x] **Signal State Machine:** Multi-phase cyclical FSM with Yellow and All-Red clearance intervals (`engine/src/signals.ts`)
-- [x] **Signal Controllers:** Fixed-Time (pre-timed) & Adaptive (Queue-responsive green extension with starvation bounds)
-- [x] **Junction Safety:** Dilemma Zone stopping logic and "Don't Block the Box" spillback gridlock prevention
-- [x] **Testing:** 34 automated unit tests passing across all components (`npm --prefix engine test`)
-- [x] **Interactive Demos:** Stage 1 (`demo:stage1`), Stage 2 (`demo:stage2`), and Stage 3 Adaptive Signal demo (`demo:stage3`)
+- [x] **Traffic Signals & Safety:** Fixed-time, adaptive queue-responsive controllers, dilemma zone rule, box-blocking prevention (`engine/src/signals.ts`)
+- [x] **Traffic Demand Modeling:** Origin-Destination (O-D) matrix with demand scaling and drift-free Poisson arrivals (`engine/src/trafficGenerator.ts`)
+- [x] **Performance Metrics Engine:** Travel Time Index (TTI), Volume-to-Capacity (V/C) heatmaps, time-series telemetry snapshots (`engine/src/metrics.ts`)
+- [x] **Testing:** 42 automated unit tests passing across all components (`npm --prefix engine test`)
+- [x] **Interactive Demos:** Stage 1 (`demo:stage1`), Stage 2 (`demo:stage2`), Stage 3 (`demo:stage3`), Stage 4 O-D Matrix demo (`demo:stage4`)
 
 ---
 
@@ -90,9 +89,9 @@ CitySim/
 - npm or pnpm
 - MongoDB (Local instance or MongoDB Atlas URI)
 
-### Quickstart (Running Stages 1, 2 & 3)
+### Quickstart (Running Stages 1 - 4)
 ```bash
-# 1. Run unit tests for the simulation engine (34 tests)
+# 1. Run unit tests for the simulation engine (42 tests)
 npm --prefix engine test
 
 # 2. Run the interactive single-intersection CLI demo (Stage 1)
@@ -103,4 +102,7 @@ npm run demo:stage2
 
 # 4. Run the Fixed-Time vs. Adaptive Signal comparison demo (Stage 3)
 npm run demo:stage3
+
+# 5. Run the O-D Matrix & Performance Metrics demo (Stage 4)
+npm run demo:stage4
 ```

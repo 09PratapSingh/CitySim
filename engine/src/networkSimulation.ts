@@ -21,12 +21,16 @@ import {
   TrafficSignalController,
   SignalControllerFactory,
 } from './signals.ts';
+import { ODMatrix, TrafficGenerator, type ODFlow } from './trafficGenerator.ts';
+import { MetricsCollector } from './metrics.ts';
 import type {
   Vehicle,
   RoadSegment,
   IntersectionNode,
   SimulationConfig,
   SimulationMetrics,
+  ComprehensiveMetrics,
+  TimeSeriesSnapshot,
   RouteResult,
   SignalState,
 } from './types.ts';
@@ -41,6 +45,8 @@ export interface NetworkSimulationOptions {
   graph: RoadGraph;
   config?: Partial<SimulationConfig>;
   odPairs?: ODPair[];
+  odMatrix?: ODMatrix;
+  snapshotInterval?: number;
 }
 
 export class NetworkSimulation {
@@ -50,10 +56,12 @@ export class NetworkSimulation {
   private currentTime: number = 0;
   private vehicleCounter: number = 0;
 
-  // Origin-Destination demands
-  private odPairs: ODPair[] = [];
-  // Key: `${originNodeId}->${destinationNodeId}`, Value: next spawn timestamp
-  private nextSpawnTimes: Map<string, number> = new Map();
+  // Origin-Destination traffic generation
+  private odMatrix: ODMatrix = new ODMatrix();
+  private trafficGenerator?: TrafficGenerator;
+
+  // Metrics collector
+  private metricsCollector: MetricsCollector;
 
   // Traffic Signal Controllers mapped by Node ID
   private signalControllers: Map<string, TrafficSignalController> = new Map();
@@ -64,9 +72,6 @@ export class NetworkSimulation {
   // Vehicles
   private activeVehicles: Vehicle[] = [];
   private completedVehicles: Vehicle[] = [];
-
-  // Metrics
-  private peakQueueLength: number = 0;
 
   constructor(options: NetworkSimulationOptions) {
     this.graph = options.graph;
@@ -83,6 +88,7 @@ export class NetworkSimulation {
     };
 
     this.prng = new PRNG(this.config.seed);
+    this.metricsCollector = new MetricsCollector(this.graph, options.snapshotInterval ?? 5.0);
 
     // Initialize stop line states for all edges as open by default
     for (const edge of this.graph.getAllEdges()) {
@@ -92,7 +98,9 @@ export class NetworkSimulation {
     // Auto-discover and initialize signal controllers from graph nodes
     this.initSignalControllers();
 
-    if (options.odPairs && options.odPairs.length > 0) {
+    if (options.odMatrix) {
+      this.setODMatrix(options.odMatrix);
+    } else if (options.odPairs && options.odPairs.length > 0) {
       this.setODPairs(options.odPairs);
     }
   }
@@ -143,18 +151,23 @@ export class NetworkSimulation {
   }
 
   /**
+   * Sets or updates the Origin-Destination matrix and initializes Poisson schedules.
+   */
+  public setODMatrix(odMatrix: ODMatrix): void {
+    this.odMatrix = odMatrix;
+    this.trafficGenerator = new TrafficGenerator(this.graph, odMatrix, this.prng);
+    this.trafficGenerator.initArrivalSchedules(this.currentTime);
+  }
+
+  /**
    * Sets or updates the Origin-Destination pairs and initializes Poisson schedules.
    */
   public setODPairs(odPairs: ODPair[]): void {
-    this.odPairs = odPairs;
-    this.nextSpawnTimes.clear();
-
+    const matrix = new ODMatrix();
     for (const od of odPairs) {
-      const key = `${od.originNodeId}->${od.destinationNodeId}`;
-      const lambdaPerSec = od.arrivalRatePerHour / 3600;
-      const initialDelay = this.prng.nextExponential(lambdaPerSec);
-      this.nextSpawnTimes.set(key, initialDelay);
+      matrix.setFlow(od.originNodeId, od.destinationNodeId, od.arrivalRatePerHour);
     }
+    this.setODMatrix(matrix);
   }
 
   /**
@@ -190,8 +203,8 @@ export class NetworkSimulation {
     // 4. Handle multi-edge transitions across intersection nodes and trip completions
     this.handleTransitions();
 
-    // 5. Update queue metrics
-    this.updateQueueMetrics();
+    // 5. Update metrics and record periodic snapshots
+    this.metricsCollector.recordTick(this.currentTime, this.activeVehicles, this.completedVehicles);
 
     // Advance clock
     this.currentTime += dt;
@@ -229,41 +242,31 @@ export class NetworkSimulation {
    * Spawns vehicles for OD pairs that have reached their scheduled arrival timestamp.
    */
   private spawnVehicles(): void {
-    for (const od of this.odPairs) {
-      const key = `${od.originNodeId}->${od.destinationNodeId}`;
-      const scheduledTime = this.nextSpawnTimes.get(key) ?? 0;
+    if (!this.trafficGenerator) return;
 
-      if (this.currentTime >= scheduledTime) {
-        // Calculate route using A*
-        const route = Router.astar(
-          this.graph,
-          od.originNodeId,
-          od.destinationNodeId,
-          'travel_time'
-        );
+    const arrivals = this.trafficGenerator.pollArrivals(this.currentTime);
+    for (const arrival of arrivals) {
+      const firstEdgeId = arrival.route.edgePath[0];
+      const firstEdge = this.graph.getEdge(firstEdgeId);
+      if (!firstEdge) continue;
 
-        if (route && route.edgePath.length > 0) {
-          const firstEdgeId = route.edgePath[0];
-          const firstEdge = this.graph.getEdge(firstEdgeId)!;
-
-          // Select least congested lane on the entry edge
-          const selectedLane = this.selectEntryLane(firstEdge);
-
-          if (this.isLaneEntryClear(firstEdgeId, selectedLane)) {
-            this.createVehicle(od, route, selectedLane);
-
-            // Schedule next arrival
-            const lambdaPerSec = od.arrivalRatePerHour / 3600;
-            const nextInterval = this.prng.nextExponential(lambdaPerSec);
-            this.nextSpawnTimes.set(key, this.currentTime + nextInterval);
-          } else {
-            // Entry blocked by traffic: delay slightly and retry next tick
-            this.nextSpawnTimes.set(key, this.currentTime + 0.5);
+      const selectedLane = this.selectEntryLane(firstEdge);
+      if (this.isLaneEntryClear(firstEdgeId, selectedLane)) {
+        const vehicle = this.trafficGenerator.createVehicle(
+          arrival,
+          this.currentTime,
+          selectedLane,
+          {
+            defaultLength: this.config.defaultVehicleLength,
+            defaultMaxAcceleration: this.config.defaultMaxAcceleration,
+            defaultDeceleration: this.config.defaultDeceleration,
+            defaultJamDistance: this.config.defaultJamDistance,
+            defaultSafeHeadway: this.config.defaultSafeHeadway,
           }
-        } else {
-          // No route available (e.g. disconnected or blocked): retry later
-          this.nextSpawnTimes.set(key, this.currentTime + 2.0);
-        }
+        );
+        this.vehicleCounter++;
+        vehicle.id = `veh_${this.vehicleCounter}`;
+        this.activeVehicles.push(vehicle);
       }
     }
   }
@@ -553,101 +556,39 @@ export class NetworkSimulation {
     this.completedVehicles.push(vehicle);
   }
 
-  private updateQueueMetrics(): void {
-    let currentMaxQueue = 0;
-    for (const edge of this.graph.getAllEdges()) {
-      const queuedCount = this.activeVehicles.filter(
-        (v) => v.currentEdgeId === edge.id && v.velocity < 0.5
-      ).length;
-      if (queuedCount > currentMaxQueue) {
-        currentMaxQueue = queuedCount;
-      }
-    }
-    if (currentMaxQueue > this.peakQueueLength) {
-      this.peakQueueLength = currentMaxQueue;
-    }
+  /**
+   * Compiles comprehensive network-wide performance metrics and KPIs.
+   */
+  public getMetrics(): ComprehensiveMetrics {
+    return this.metricsCollector.compileMetrics(
+      this.currentTime,
+      this.vehicleCounter,
+      this.activeVehicles,
+      this.completedVehicles
+    );
+  }
+
+  public getComprehensiveMetrics(): ComprehensiveMetrics {
+    return this.getMetrics();
+  }
+
+  public getTimeSeries(): TimeSeriesSnapshot[] {
+    return this.metricsCollector.getTimeSeries();
   }
 
   /**
-   * Compiles network-wide performance metrics.
+   * Returns road-level congestion index for heatmaps.
    */
-  public getMetrics(): SimulationMetrics {
-    const elapsedSeconds = Math.max(0.001, this.currentTime);
-    const elapsedHours = elapsedSeconds / 3600;
-
-    const completedCount = this.completedVehicles.length;
-    let sumTravelTime = 0;
-    let sumWaitTime = 0;
-
-    for (const v of this.completedVehicles) {
-      sumTravelTime += (v.completionTime ?? this.currentTime) - v.spawnTime;
-      sumWaitTime += v.totalWaitTime;
-    }
-
-    let sumSpeed = 0;
-    for (const v of this.activeVehicles) {
-      sumSpeed += v.velocity;
-    }
-    const averageSpeed =
-      this.activeVehicles.length > 0
-        ? sumSpeed / this.activeVehicles.length
-        : 0;
-
-    const queueLengthByEdge: Record<string, number> = {};
-    for (const edge of this.graph.getAllEdges()) {
-      const q = this.activeVehicles.filter(
-        (v) => v.currentEdgeId === edge.id && v.velocity < 0.5
-      ).length;
-      queueLengthByEdge[edge.id] = q;
-    }
-
-    return {
-      simulationTime: Number(this.currentTime.toFixed(2)),
-      activeVehiclesCount: this.activeVehicles.length,
-      completedVehiclesCount: completedCount,
-      totalSpawned: this.vehicleCounter,
-      averageSpeed: Number(averageSpeed.toFixed(2)),
-      averageWaitTime:
-        completedCount > 0
-          ? Number((sumWaitTime / completedCount).toFixed(2))
-          : 0,
-      averageTravelTime:
-        completedCount > 0
-          ? Number((sumTravelTime / completedCount).toFixed(2))
-          : 0,
-      maxQueueLength: this.peakQueueLength,
-      throughputPerHour: Number((completedCount / elapsedHours).toFixed(1)),
-      queueLengthByEdge,
-    };
+  public getCongestionMap(): Record<string, { vehicleCount: number; densityRatio: number; averageSpeed: number; queueLength: number }> {
+    return this.metricsCollector.computeSegmentCongestion(this.activeVehicles);
   }
 
-  /**
-   * Returns road-level congestion index (Volume-to-Capacity ratio proxy).
-   */
-  public getCongestionMap(): Record<string, { vehicleCount: number; densityRatio: number; averageSpeed: number }> {
-    const map: Record<string, { vehicleCount: number; densityRatio: number; averageSpeed: number }> = {};
+  public getODMatrix(): ODMatrix {
+    return this.odMatrix;
+  }
 
-    for (const edge of this.graph.getAllEdges()) {
-      const vehs = this.activeVehicles.filter((v) => v.currentEdgeId === edge.id);
-      const vehicleCount = vehs.length;
-
-      const maxStorageCapacity = (edge.length / (this.config.defaultJamDistance! + this.config.defaultVehicleLength!)) * edge.lanes;
-      const densityRatio = maxStorageCapacity > 0 ? Math.min(1.0, vehicleCount / maxStorageCapacity) : 0;
-
-      let avgSpeed = 0;
-      if (vehicleCount > 0) {
-        const sumV = vehs.reduce((acc, v) => acc + v.velocity, 0);
-        avgSpeed = sumV / vehicleCount;
-      }
-
-      map[edge.id] = {
-        vehicleCount,
-        densityRatio: Number(densityRatio.toFixed(3)),
-        averageSpeed: Number(avgSpeed.toFixed(2)),
-      };
-    }
-
-    return map;
+  public getTrafficGenerator(): TrafficGenerator | undefined {
+    return this.trafficGenerator;
   }
 
   // Getters

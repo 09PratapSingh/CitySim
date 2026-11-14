@@ -209,6 +209,31 @@ export interface SimulationConfig {
   defaultSafeHeadway?: number;
 }
 
+export interface TimeSeriesSnapshot {
+  /** Simulation timestamp in seconds */
+  timestamp: number;
+  /** Active vehicles currently in network */
+  activeVehicles: number;
+  /** Cumulative completed vehicles */
+  completedVehicles: number;
+  /** Instantaneous mean speed across network in m/s */
+  currentAvgSpeed: number;
+  /** Cumulative mean stopped delay in seconds */
+  currentAvgWaitTime: number;
+  /** Overall network-wide volume-to-capacity saturation ratio [0, 1] */
+  networkCongestionRatio: number;
+  /** Realized throughput rate in vehicles/hour */
+  currentThroughputRate: number;
+}
+
+export interface SegmentCongestionData {
+  edgeId: string;
+  vehicleCount: number;
+  densityRatio: number; // 0.0 to 1.0 (Volume-to-Capacity ratio proxy)
+  averageSpeed: number;
+  queueLength: number;
+}
+
 export interface SimulationMetrics {
   /** Elapsed simulation time in seconds */
   simulationTime: number;
@@ -239,4 +264,17 @@ export interface SimulationMetrics {
 
   /** Breakdown of active queue lengths by road segment ID */
   queueLengthByEdge: Record<string, number>;
+}
+
+export interface ComprehensiveMetrics extends SimulationMetrics {
+  /** Travel Time Index: Actual travel time / Free-flow travel time (1.0 = no delay) */
+  travelTimeIndex: number;
+  /** Theoretical average travel time under zero traffic */
+  freeFlowTravelTimeAvg: number;
+  /** Total vehicle delay accumulated across all vehicles in hours */
+  totalDelayHours: number;
+  /** Periodic snapshots for before/after Recharts graphs */
+  timeSeries: TimeSeriesSnapshot[];
+  /** Segment-by-segment congestion metrics for map heatmaps */
+  roadCongestion: Record<string, SegmentCongestionData>;
 }

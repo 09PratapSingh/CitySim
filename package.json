@@ -1,0 +1,24 @@
+{
+  "name": "citysim-root",
+  "version": "1.0.0",
+  "description": "CitySim – Traffic Scenario Testing Platform",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "engine",
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "test:engine": "npm --prefix engine test",
+    "demo:stage1": "node --experimental-strip-types engine/demo.ts"
+  },
+  "keywords": [
+    "traffic-simulation",
+    "intelligent-driver-model",
+    "dijkstra",
+    "urban-planning"
+  ],
+  "author": "",
+  "license": "ISC"
+}

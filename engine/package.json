@@ -1,0 +1,20 @@
+{
+  "name": "citysim-engine",
+  "version": "1.0.0",
+  "description": "Deterministic microscopic traffic simulation engine for CitySim",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/**/*.test.ts",
+    "demo": "node --experimental-strip-types demo.ts"
+  },
+  "keywords": [
+    "simulation",
+    "car-following",
+    "idm",
+    "poisson",
+    "traffic"
+  ],
+  "author": "",
+  "license": "ISC"
+}

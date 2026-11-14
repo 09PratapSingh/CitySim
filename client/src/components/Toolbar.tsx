@@ -48,21 +48,21 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   return (
     <aside className="absolute left-4 top-18 z-20 flex flex-col gap-2">
       {/* Primary Tool Palette */}
-      <div className="bg-slate-900/90 backdrop-blur border border-slate-800 rounded-xl p-1.5 shadow-xl flex flex-col gap-1">
+      <div className="bg-white/95 backdrop-blur-md border border-slate-200 rounded-xl p-1.5 shadow-lg flex flex-col gap-1 text-slate-700">
         {tools.map((tool) => (
           <button
             key={tool.id}
             onClick={() => setCurrentTool(tool.id)}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition group relative ${
               currentTool === tool.id
-                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-sm'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 font-semibold shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
             title={`${tool.label} (${tool.shortcut})`}
           >
             {tool.icon}
             <span className="hidden md:inline">{tool.label}</span>
-            <kbd className="hidden lg:inline ml-auto text-[10px] text-slate-500 font-mono bg-slate-800 px-1 rounded">
+            <kbd className="hidden lg:inline ml-auto text-[10px] text-slate-400 font-mono bg-slate-100 border border-slate-200 px-1 rounded">
               {tool.shortcut}
             </kbd>
           </button>
@@ -71,13 +71,13 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
       {/* Road Drawing Configuration (Active when drawing edge) */}
       {currentTool === 'draw_edge' && (
-        <div className="bg-slate-900/90 backdrop-blur border border-slate-800 rounded-xl p-2 shadow-xl flex flex-col gap-1 text-xs">
-          <span className="text-[11px] font-semibold text-slate-400 px-1">Road Type</span>
-          <div className="flex bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+        <div className="bg-white/95 backdrop-blur-md border border-slate-200 rounded-xl p-2 shadow-lg flex flex-col gap-1 text-xs text-slate-700">
+          <span className="text-[11px] font-semibold text-slate-500 px-1">Road Type</span>
+          <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
             <button
               onClick={() => setRoadMode('two-way')}
               className={`flex-1 py-1 rounded text-center transition ${
-                roadMode === 'two-way' ? 'bg-slate-800 text-emerald-400' : 'text-slate-500 hover:text-slate-300'
+                roadMode === 'two-way' ? 'bg-white text-emerald-700 font-semibold shadow-2xs' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               Two-Way
@@ -85,7 +85,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             <button
               onClick={() => setRoadMode('one-way')}
               className={`flex-1 py-1 rounded text-center transition ${
-                roadMode === 'one-way' ? 'bg-slate-800 text-emerald-400' : 'text-slate-500 hover:text-slate-300'
+                roadMode === 'one-way' ? 'bg-white text-emerald-700 font-semibold shadow-2xs' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               One-Way
@@ -95,13 +95,13 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       )}
 
       {/* Utility Actions */}
-      <div className="bg-slate-900/90 backdrop-blur border border-slate-800 rounded-xl p-1.5 shadow-xl flex flex-col gap-1">
+      <div className="bg-white/95 backdrop-blur-md border border-slate-200 rounded-xl p-1.5 shadow-lg flex flex-col gap-1 text-slate-700">
         <button
           onClick={() => setGridSnap(!gridSnap)}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
             gridSnap
-              ? 'text-cyan-400 bg-cyan-950/40 border border-cyan-800/40'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              ? 'text-cyan-700 bg-cyan-50 border border-cyan-200 font-semibold shadow-2xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
           }`}
           title="Toggle Grid Snapping (25m grid)"
         >
@@ -111,7 +111,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
         <button
           onClick={onResetView}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition"
           title="Reset View & Center"
         >
           <Maximize2 className="w-4 h-4" />
@@ -120,19 +120,19 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
         <button
           onClick={onClearMap}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 transition"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50 transition"
           title="Clear all nodes and roads"
         >
-          <RotateCcw className="w-4 h-4" />
+          <Trash2 className="w-4 h-4" />
           <span className="hidden md:inline">Clear All</span>
         </button>
       </div>
 
       {/* Stats counter tag */}
-      <div className="px-3 py-1.5 bg-slate-900/80 border border-slate-800/60 rounded-lg text-[11px] text-slate-400 flex items-center justify-between">
-        <span>Nodes: <strong className="text-slate-200 font-mono">{nodeCount}</strong></span>
-        <span className="mx-1">•</span>
-        <span>Roads: <strong className="text-slate-200 font-mono">{edgeCount}</strong></span>
+      <div className="px-3 py-1.5 bg-white/95 border border-slate-200 rounded-lg text-[11px] text-slate-600 shadow-sm flex items-center justify-between">
+        <span>Nodes: <strong className="text-slate-900 font-mono font-bold">{nodeCount}</strong></span>
+        <span className="mx-1 text-slate-300">•</span>
+        <span>Roads: <strong className="text-slate-900 font-mono font-bold">{edgeCount}</strong></span>
       </div>
     </aside>
   );

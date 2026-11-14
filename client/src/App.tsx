@@ -8,6 +8,7 @@ import { MetricsOverlay } from './components/MetricsOverlay.tsx';
 import { MapManagerModal } from './components/MapManagerModal.tsx';
 import { ScenarioEditorModal } from './components/ScenarioEditorModal.tsx';
 import { ComparisonDashboard } from './components/ComparisonDashboard.tsx';
+import { PastRunsModal } from './components/PastRunsModal.tsx';
 import { useSocketSimulation } from './hooks/useSocketSimulation.ts';
 import { fetchMaps } from './api/client.ts';
 import type { 
@@ -61,6 +62,7 @@ export const App: React.FC = () => {
   const [roadMode, setRoadMode] = useState<'two-way' | 'one-way'>('two-way');
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   const [isScenarioModalOpen, setIsScenarioModalOpen] = useState(false);
+  const [isPastRunsModalOpen, setIsPastRunsModalOpen] = useState(false);
   const [stagedScenario, setStagedScenario] = useState<any>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
@@ -270,7 +272,7 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col w-screen h-screen bg-slate-950 overflow-hidden font-sans">
+    <div className="flex flex-col w-screen h-screen bg-slate-100 text-slate-900 overflow-hidden font-sans">
       {/* Top Navigation Bar */}
       <Navbar
         mapName={mapName}
@@ -284,6 +286,7 @@ export const App: React.FC = () => {
         onStopSimulation={sim.stopSimulation}
         onOpenMapManager={() => setIsMapModalOpen(true)}
         onOpenScenarioModal={() => setIsScenarioModalOpen(true)}
+        onOpenPastRuns={() => setIsPastRunsModalOpen(true)}
         isConnected={sim.isConnected}
         hasUnsavedChanges={hasUnsavedChanges}
       />
@@ -396,6 +399,16 @@ export const App: React.FC = () => {
         baseMap={{ id: mapId || undefined, name: mapName, nodes, edges }}
         onRunComparison={(scenario) => {
           setStagedScenario(scenario);
+          setActiveMode('comparison');
+        }}
+      />
+
+      {/* Past Runs History Modal */}
+      <PastRunsModal
+        isOpen={isPastRunsModalOpen}
+        onClose={() => setIsPastRunsModalOpen(false)}
+        onInspectRun={(_run) => {
+          setIsPastRunsModalOpen(false);
           setActiveMode('comparison');
         }}
       />

@@ -521,10 +521,10 @@ export async function compareSimulations(req: Request, res: Response): Promise<v
       const savedScen = await DataStore.createRun({
         baseMapId,
         scenarioId: scenarioId || 'scenario_custom',
-        scenarioName: activeScenarioName,
+        scenarioName: resolvedScenarioName,
         seed,
         durationSeconds,
-        modifications: activeMods || { closedEdgeIds: [], signalOverrides: [], speedLimitOverrides: [] },
+        modifications: modifications || scenario?.modifications || { closedEdgeIds: [], signalOverrides: [], speedLimitOverrides: [] },
         aggregateMetrics: primaryScenarioRun!.aggregateMetrics,
         timeSeries: primaryScenarioRun!.timeSeries,
         roadCongestion: primaryScenarioRun!.roadCongestion,

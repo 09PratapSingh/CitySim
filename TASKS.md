@@ -110,8 +110,19 @@ This checklist tracks the stage-wise progress of the **CitySim: Traffic Scenario
 - ✅ 8.0b "Center Route Closure" scenario & explicit corridor OD demand matrix (`node_ML` to `node_MR`).
 - ✅ 8.0c Headless verification of A* alternate route pathfinding and 100% demand preservation (zero dropped trips).
 - ✅ 8.0d Database and In-Memory store persistence with UI Map and Scenario selectors.
-- ⬜ 8.1 Implement CSV Exporter for road-level and network-level metrics over time.
-- ⬜ 8.2 Implement PDF Report Generator (executive summary, scenario differences, metric charts, congestion tables).
-- ⬜ 8.3 Build Past Runs Browser (view, compare, or reopen historical simulation runs).
-- ⬜ 8.4 Finalize documentation: Architecture diagrams, API specifications, and viva defense guide (`VIVA_GUIDE.md`).
-- ⬜ 8.5 End-to-end user acceptance test and performance check.
+- ✅ 8.1 Implement CSV Exporter for road-level and network-level metrics over time.
+- ✅ 8.2 Implement PDF Report Generator (executive summary, scenario differences, metric charts, congestion tables).
+- ✅ 8.3 Build Past Runs Browser (view, compare, or reopen historical simulation runs).
+- ✅ 8.4 Finalize documentation: Architecture diagrams, API specifications, and viva defense guide (`VIVA_GUIDE.md`).
+- ✅ 8.5 End-to-end user acceptance test and performance check.
+
+---
+
+## Stage 9: Professional 2D Canvas & "Day Mode" UI Overhaul
+- ✅ 9.1 Canvas Viewport Background & Grid: Soft light off-white palette (`#f8fafc`), subtle grid lines, and major 100m coordinate ticks.
+- ✅ 9.2 Multi-Layered Asphalt Road Ribbons: Dark charcoal asphalt (`#1e293b`) with paved curb shoulders (`#94a3b8`), lane width proportional to lane count, outer margin lines, crisp dashed lane dividers, directional white chevrons, and high-visibility yellow/black barricades for closed roads.
+- ✅ 9.3 Realistic Intersections & Traffic Control: Paved junction boxes with yellow cross-hatch "Keep Clear" box markings, solid white approach stop lines (3.5px), pedestrian zebra crosswalks, and illuminated 3-aspect roadside signal heads.
+- ✅ 9.4 Top-Down Rectangular Vehicle Models: Distinct vehicle blocks (cars: 4.8m x 2.0m, buses/trucks: 9.0m x 2.5m) with subtle drop shadows, tinted windshields, warm headlights, reactive glowing red brake lights, and deterministic vibrant color palette hashing.
+- ✅ 9.5 Day Mode UI Panels: Transition all dark panels (`App`, `Navbar`, `Toolbar`, `Inspector`, `SimulationControls`, `MetricsOverlay`, `ComparisonDashboard`, `PastRunsModal`, `ReportModal`) to clean, modern white/light-gray themes with subtle drop shadows and high-contrast typography.
+- ✅ 9.6 Resilient WebSocket Auto-Reconnection: Dynamic port resolution (targeting port 5000 from Vite dev server) with exponential backoff and continuous auto-reconnection.
+

@@ -41,19 +41,19 @@ export const Inspector: React.FC<InspectorProps> = ({
 }) => {
   if (!selection) {
     return (
-      <aside className="absolute right-4 top-18 z-20 w-72 bg-slate-900/90 backdrop-blur border border-slate-800 rounded-xl p-4 shadow-xl text-xs flex flex-col gap-3 select-none">
-        <div className="flex items-center gap-2 font-semibold text-slate-300 pb-2 border-b border-slate-800">
-          <Info className="w-4 h-4 text-emerald-400" />
+      <aside className="absolute right-4 top-18 z-20 w-72 bg-white/95 backdrop-blur-md border border-slate-200 rounded-xl p-4 shadow-xl text-xs flex flex-col gap-3 select-none text-slate-800">
+        <div className="flex items-center gap-2 font-semibold text-slate-800 pb-2 border-b border-slate-200">
+          <Info className="w-4 h-4 text-emerald-600" />
           <span>Quick Controls Guide</span>
         </div>
-        <div className="space-y-2 text-slate-400">
-          <p><strong className="text-slate-200">Select:</strong> Click any node or road to inspect and edit its physical properties.</p>
-          <p><strong className="text-slate-200">Add Node:</strong> Click anywhere on canvas to create an intersection.</p>
-          <p><strong className="text-slate-200">Draw Road:</strong> Click a start node, then click a target node to connect them.</p>
-          <p><strong className="text-slate-200">Pan & Zoom:</strong> Drag with middle mouse or hand tool; scroll wheel to zoom.</p>
+        <div className="space-y-2 text-slate-600">
+          <p><strong className="text-slate-900">Select:</strong> Click any node or road to inspect and edit its physical properties.</p>
+          <p><strong className="text-slate-900">Add Node:</strong> Click anywhere on canvas to create an intersection.</p>
+          <p><strong className="text-slate-900">Draw Road:</strong> Click a start node, then click a target node to connect them.</p>
+          <p><strong className="text-slate-900">Pan & Zoom:</strong> Drag with middle mouse or hand tool; scroll wheel to zoom.</p>
         </div>
-        <div className="pt-2 border-t border-slate-800 text-[11px] text-slate-500">
-          Tip: Set intersection to <strong className="text-cyan-400">Adaptive Signal</strong> to test dynamic queue-actuated green times.
+        <div className="pt-2 border-t border-slate-200 text-[11px] text-slate-500">
+          Tip: Set intersection to <strong className="text-cyan-700">Adaptive Signal</strong> to test dynamic queue-actuated green times.
         </div>
       </aside>
     );
@@ -64,21 +64,21 @@ export const Inspector: React.FC<InspectorProps> = ({
     if (!node) return null;
 
     return (
-      <aside className="absolute right-4 top-18 z-20 w-80 bg-slate-900/95 backdrop-blur border border-slate-800 rounded-xl p-4 shadow-2xl text-xs flex flex-col gap-4 select-none">
-        <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-          <div className="flex items-center gap-2 font-semibold text-slate-200">
-            <Sliders className="w-4 h-4 text-emerald-400" />
+      <aside className="absolute right-4 top-18 z-20 w-80 bg-white/95 backdrop-blur-md border border-slate-200 rounded-xl p-4 shadow-xl text-xs flex flex-col gap-4 select-none text-slate-800">
+        <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+          <div className="flex items-center gap-2 font-bold text-slate-800">
+            <Sliders className="w-4 h-4 text-emerald-600" />
             <span>Intersection Properties</span>
           </div>
-          <button onClick={onClose} className="p-1 rounded hover:bg-slate-800 text-slate-400">
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
 
         {/* Node ID and Position */}
         <div className="space-y-1">
-          <span className="text-[11px] font-medium text-slate-400">Node Identifier</span>
-          <div className="font-mono text-slate-200 bg-slate-950 px-2 py-1.5 rounded border border-slate-800">
+          <span className="text-[11px] font-semibold text-slate-500">Node Identifier</span>
+          <div className="font-mono text-slate-900 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 font-bold">
             {node.id}
           </div>
           <div className="text-[11px] text-slate-500 font-mono mt-1">
@@ -88,23 +88,23 @@ export const Inspector: React.FC<InspectorProps> = ({
 
         {/* Signal Control Strategy */}
         <div className="space-y-2">
-          <label className="text-[11px] font-medium text-slate-300">Right-of-Way Control</label>
+          <label className="text-[11px] font-semibold text-slate-700">Right-of-Way Control</label>
           <div className="flex flex-col gap-1.5">
             {[
-              { id: 'unsignalized', label: 'Unsignalized (Yield / Priority)', icon: <TrafficCone className="w-3.5 h-3.5 text-slate-400" />, desc: 'Vehicles yield and navigate without traffic lights' },
-              { id: 'fixed_signal', label: 'Fixed-Time Signal', icon: <Clock className="w-3.5 h-3.5 text-cyan-400" />, desc: 'Pre-timed cyclic phases (e.g. 30s East-West, 30s North-South)' },
-              { id: 'adaptive_signal', label: 'Adaptive Queue-Responsive', icon: <Zap className="w-3.5 h-3.5 text-emerald-400" />, desc: 'Actuated dynamic green time extension based on queue length' },
+              { id: 'unsignalized', label: 'Unsignalized (Yield / Priority)', icon: <TrafficCone className="w-3.5 h-3.5 text-slate-500" />, desc: 'Vehicles yield and navigate without traffic lights' },
+              { id: 'fixed_signal', label: 'Fixed-Time Signal', icon: <Clock className="w-3.5 h-3.5 text-cyan-600" />, desc: 'Pre-timed cyclic phases (e.g. 25s East-West, 25s North-South)' },
+              { id: 'adaptive_signal', label: 'Adaptive Queue-Responsive', icon: <Zap className="w-3.5 h-3.5 text-emerald-600" />, desc: 'Actuated dynamic green time extension based on queue backlog' },
             ].map((ctrl) => (
               <button
                 key={ctrl.id}
                 onClick={() => onUpdateNode(node.id, { controlType: ctrl.id as IntersectionControlType })}
-                className={`flex flex-col text-left p-2 rounded-lg border transition ${
+                className={`flex flex-col text-left p-2.5 rounded-lg border transition ${
                   node.controlType === ctrl.id
-                    ? 'bg-slate-800/90 border-emerald-500/50 text-emerald-300'
-                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:bg-slate-800/40 hover:text-slate-200'
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-medium shadow-2xs'
+                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                 }`}
               >
-                <div className="flex items-center gap-2 font-medium">
+                <div className="flex items-center gap-2 font-semibold">
                   {ctrl.icon}
                   <span>{ctrl.label}</span>
                 </div>
@@ -116,17 +116,17 @@ export const Inspector: React.FC<InspectorProps> = ({
 
         {/* Connected Edges */}
         <div className="space-y-1">
-          <span className="text-[11px] font-medium text-slate-400">Connected Roads</span>
-          <div className="text-[11px] text-slate-500 space-y-0.5">
-            <div>Incoming approaches: {edges.filter((e) => e.toNodeId === node.id).length}</div>
-            <div>Outgoing exits: {edges.filter((e) => e.fromNodeId === node.id).length}</div>
+          <span className="text-[11px] font-semibold text-slate-500">Connected Roads</span>
+          <div className="text-[11px] text-slate-600 space-y-0.5 font-mono">
+            <div>Incoming: {edges.filter((e) => e.toNodeId === node.id).map((e) => e.id).join(', ') || 'None'}</div>
+            <div>Outgoing: {edges.filter((e) => e.fromNodeId === node.id).map((e) => e.id).join(', ') || 'None'}</div>
           </div>
         </div>
 
-        {/* Delete Action */}
+        {/* Delete Node Button */}
         <button
           onClick={() => onDeleteNode(node.id)}
-          className="mt-2 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/50 font-medium transition"
+          className="mt-2 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-semibold transition shadow-2xs"
         >
           <Trash2 className="w-3.5 h-3.5" />
           <span>Delete Intersection</span>
@@ -135,6 +135,7 @@ export const Inspector: React.FC<InspectorProps> = ({
     );
   }
 
+  // Edge Inspector
   if (selection.type === 'edge') {
     const edge = edges.find((e) => e.id === selection.id);
     if (!edge) return null;
@@ -142,47 +143,47 @@ export const Inspector: React.FC<InspectorProps> = ({
     const speedKmH = Math.round(edge.speedLimit * 3.6);
 
     return (
-      <aside className="absolute right-4 top-18 z-20 w-80 bg-slate-900/95 backdrop-blur border border-slate-800 rounded-xl p-4 shadow-2xl text-xs flex flex-col gap-4 select-none">
-        <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-          <div className="flex items-center gap-2 font-semibold text-slate-200">
-            <Sliders className="w-4 h-4 text-emerald-400" />
+      <aside className="absolute right-4 top-18 z-20 w-80 bg-white/95 backdrop-blur-md border border-slate-200 rounded-xl p-4 shadow-xl text-xs flex flex-col gap-4 select-none text-slate-800">
+        <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+          <div className="flex items-center gap-2 font-bold text-slate-800">
+            <Sliders className="w-4 h-4 text-emerald-600" />
             <span>Road Segment Properties</span>
           </div>
-          <button onClick={onClose} className="p-1 rounded hover:bg-slate-800 text-slate-400">
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
 
         {/* Road ID & Connectivity */}
         <div className="space-y-1">
-          <span className="text-[11px] font-medium text-slate-400">Road Identifier</span>
-          <div className="font-mono text-slate-200 bg-slate-950 px-2 py-1.5 rounded border border-slate-800 truncate">
+          <span className="text-[11px] font-semibold text-slate-500">Road Identifier</span>
+          <div className="font-mono text-slate-900 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 font-bold truncate">
             {edge.id}
           </div>
-          <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1">
+          <div className="text-[11px] text-slate-600 flex items-center justify-between pt-1">
             <span>{edge.fromNodeId} &rarr; {edge.toNodeId}</span>
-            <span className="font-mono text-slate-300">{Math.round(edge.length)} meters</span>
+            <span className="font-mono text-slate-700 font-semibold">{Math.round(edge.length)} meters</span>
           </div>
         </div>
 
         {/* Number of Lanes */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-cyan-400" />
+            <label className="text-[11px] font-semibold text-slate-700 flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-cyan-600" />
               <span>Lane Capacity</span>
             </label>
-            <span className="font-mono text-slate-200">{edge.lanes} {edge.lanes === 1 ? 'Lane' : 'Lanes'}</span>
+            <span className="font-mono text-slate-900 font-bold">{edge.lanes} {edge.lanes === 1 ? 'Lane' : 'Lanes'}</span>
           </div>
-          <div className="grid grid-cols-4 gap-1">
+          <div className="grid grid-cols-4 gap-1.5">
             {[1, 2, 3, 4].map((lane) => (
               <button
                 key={lane}
                 onClick={() => onUpdateEdge(edge.id, { lanes: lane })}
-                className={`py-1.5 rounded text-center font-medium transition ${
+                className={`py-1.5 rounded-lg text-center font-bold transition ${
                   edge.lanes === lane
-                    ? 'bg-cyan-600 text-white shadow'
-                    : 'bg-slate-950 border border-slate-800 text-slate-400 hover:bg-slate-800'
+                    ? 'bg-cyan-600 text-white shadow-xs'
+                    : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                 }`}
               >
                 {lane}
@@ -194,11 +195,11 @@ export const Inspector: React.FC<InspectorProps> = ({
         {/* Speed Limit Slider */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5">
-              <Gauge className="w-3.5 h-3.5 text-amber-400" />
+            <label className="text-[11px] font-semibold text-slate-700 flex items-center gap-1.5">
+              <Gauge className="w-3.5 h-3.5 text-amber-500" />
               <span>Speed Limit</span>
             </label>
-            <span className="font-mono text-amber-300 font-semibold">{speedKmH} km/h <span className="text-[10px] text-slate-400">({edge.speedLimit.toFixed(1)} m/s)</span></span>
+            <span className="font-mono text-amber-700 font-bold">{speedKmH} km/h <span className="text-[10px] text-slate-400 font-normal">({edge.speedLimit.toFixed(1)} m/s)</span></span>
           </div>
           <input
             type="range"
@@ -210,25 +211,25 @@ export const Inspector: React.FC<InspectorProps> = ({
               const kmh = Number(e.target.value);
               onUpdateEdge(edge.id, { speedLimit: kmh / 3.6 });
             }}
-            className="w-full accent-emerald-500 cursor-pointer"
+            className="w-full accent-emerald-600 cursor-pointer"
           />
         </div>
 
         {/* Road Closure Toggle (Scenario Testing Feature) */}
-        <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 flex items-center justify-between">
+        <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <ShieldAlert className={`w-4 h-4 ${edge.isClosed ? 'text-rose-400' : 'text-slate-500'}`} />
+            <ShieldAlert className={`w-4 h-4 ${edge.isClosed ? 'text-rose-600' : 'text-slate-400'}`} />
             <div>
-              <div className="text-[11px] font-medium text-slate-200">Road Closure</div>
+              <div className="text-[11px] font-bold text-slate-800">Road Closure</div>
               <div className="text-[10px] text-slate-500">Block traffic flow (Incident / Works)</div>
             </div>
           </div>
           <button
             onClick={() => onUpdateEdge(edge.id, { isClosed: !edge.isClosed })}
-            className={`px-3 py-1 rounded text-xs font-semibold transition ${
+            className={`px-3 py-1 rounded-lg text-xs font-bold transition shadow-xs ${
               edge.isClosed
-                ? 'bg-rose-600 text-white shadow-[0_0_10px_#f43f5e]'
-                : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                ? 'bg-rose-600 text-white shadow-rose-200'
+                : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
             }`}
           >
             {edge.isClosed ? 'CLOSED' : 'OPEN'}
@@ -236,15 +237,15 @@ export const Inspector: React.FC<InspectorProps> = ({
         </div>
 
         {/* Directionality Toggle */}
-        <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+        <div className="flex items-center justify-between text-[11px] text-slate-600 pt-1">
           <span>Directionality</span>
-          <span className="font-medium text-slate-200">{edge.isOneWay ? 'One-Way' : 'Two-Way'}</span>
+          <span className="font-semibold text-slate-800">{edge.isOneWay ? 'One-Way' : 'Two-Way'}</span>
         </div>
 
-        {/* Delete Edge Action */}
+        {/* Delete Edge Button */}
         <button
           onClick={() => onDeleteEdge(edge.id)}
-          className="mt-2 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/50 font-medium transition"
+          className="mt-2 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-semibold transition shadow-2xs"
         >
           <Trash2 className="w-3.5 h-3.5" />
           <span>Delete Road Segment</span>

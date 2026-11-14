@@ -232,3 +232,40 @@ test('API: 3x3 Grid Map and Center Route Closure Detour Comparison', async () =>
   assert.ok(scenario.aggregateMetrics.completedVehiclesCount > 0, 'Vehicles must successfully complete detour');
   assert.strictEqual(deltas.replicationsCount, 3);
 });
+
+test('API: Runs history retrieval and Executive Summary Report', async () => {
+  // 1. Fetch runs list
+  const runsRes = await request(app).get('/api/simulations/runs');
+  assert.strictEqual(runsRes.status, 200);
+  assert.strictEqual(runsRes.body.success, true);
+  assert.ok(runsRes.body.data.length >= 1, 'Runs should be recorded from prior simulations');
+
+  const firstRun = runsRes.body.data[0];
+  const runId = firstRun.id || firstRun._id;
+
+  // 2. Fetch specific run by ID
+  const singleRunRes = await request(app).get(`/api/simulations/runs/${runId}`);
+  assert.strictEqual(singleRunRes.status, 200);
+  assert.strictEqual(singleRunRes.body.success, true);
+  assert.strictEqual(singleRunRes.body.data.seed, firstRun.seed);
+
+  // 3. Generate summary report via endpoint
+  const reportRes = await request(app).post('/api/simulations/reports/summary').send({
+    baseMapName: '3x3 City Block Grid',
+    scenarioName: 'Center Route Closure',
+    seed: 42,
+    durationSeconds: 600,
+    replicationsCount: 5,
+    deltas: {
+      deltaAvgWaitTime: -0.8,
+      pctChangeAvgWaitTime: -5.2,
+      isWaitTimeSignificant: false,
+      deltaThroughput: 15,
+    },
+  });
+
+  assert.strictEqual(reportRes.status, 200);
+  assert.strictEqual(reportRes.body.success, true);
+  assert.ok(reportRes.body.data.title.includes('CitySim'));
+  assert.strictEqual(reportRes.body.data.metadata.scenarioName, 'Center Route Closure');
+});

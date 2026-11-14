@@ -213,51 +213,79 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({
     worldToScreen
   ]);
 
-  // --- RENDERING HELPERS ---
+  // --- RENDERING HELPERS (Day Mode / Professional Theme) ---
+
+  const VIBRANT_CAR_PALETTE = [
+    '#ef4444', // Crimson Red
+    '#2563eb', // Royal Blue
+    '#10b981', // Emerald Green
+    '#f97316', // Sunset Orange
+    '#8b5cf6', // Amethyst Violet
+    '#06b6d4', // Sky Cyan
+    '#ec4899', // Hot Pink
+    '#eab308', // Amber Gold
+  ];
+
+  const hashVehicleId = (id: string): number => {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+      hash = ((hash << 5) - hash) + id.charCodeAt(i);
+      hash |= 0;
+    }
+    return Math.abs(hash);
+  };
 
   const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+    // 1. Off-white / soft light-gray canvas background
+    ctx.save();
+    ctx.fillStyle = '#f8fafc'; // Slate-50 off-white
+    ctx.fillRect(0, 0, width, height);
+
     const gridSizeMeters = 50;
     const gridScreenSize = gridSizeMeters * viewport.zoom;
 
-    if (gridScreenSize < 10) return; // Don't draw if too zoomed out
+    if (gridScreenSize >= 8) {
+      const startWorld = screenToWorld(0, 0, width, height);
+      const endWorld = screenToWorld(width, height, width, height);
 
-    ctx.save();
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = '#0f172a'; // slate-900 subtle grid lines
+      const startX = Math.floor(startWorld.x / gridSizeMeters) * gridSizeMeters;
+      const endX = Math.ceil(endWorld.x / gridSizeMeters) * gridSizeMeters;
+      const startY = Math.floor(startWorld.y / gridSizeMeters) * gridSizeMeters;
+      const endY = Math.ceil(endWorld.y / gridSizeMeters) * gridSizeMeters;
 
-    const startWorld = screenToWorld(0, 0, width, height);
-    const endWorld = screenToWorld(width, height, width, height);
+      // Draw subtle grid lines
+      for (let x = startX; x <= endX; x += gridSizeMeters) {
+        const isMajor = Math.abs(x) % 100 === 0;
+        const s = worldToScreen(x, 0, width, height);
+        ctx.beginPath();
+        ctx.strokeStyle = isMajor ? '#cbd5e1' : '#e2e8f0'; // Slate-300 / Slate-200
+        ctx.lineWidth = isMajor ? 1.2 : 0.8;
+        ctx.moveTo(s.x, 0);
+        ctx.lineTo(s.x, height);
+        ctx.stroke();
+      }
 
-    const startX = Math.floor(startWorld.x / gridSizeMeters) * gridSizeMeters;
-    const endX = Math.ceil(endWorld.x / gridSizeMeters) * gridSizeMeters;
-    const startY = Math.floor(startWorld.y / gridSizeMeters) * gridSizeMeters;
-    const endY = Math.ceil(endWorld.y / gridSizeMeters) * gridSizeMeters;
-
-    for (let x = startX; x <= endX; x += gridSizeMeters) {
-      const s = worldToScreen(x, 0, width, height);
-      ctx.beginPath();
-      ctx.moveTo(s.x, 0);
-      ctx.lineTo(s.x, height);
-      ctx.stroke();
-    }
-
-    for (let y = startY; y <= endY; y += gridSizeMeters) {
-      const s = worldToScreen(0, y, width, height);
-      ctx.beginPath();
-      ctx.moveTo(0, s.y);
-      ctx.lineTo(width, s.y);
-      ctx.stroke();
+      for (let y = startY; y <= endY; y += gridSizeMeters) {
+        const isMajor = Math.abs(y) % 100 === 0;
+        const s = worldToScreen(0, y, width, height);
+        ctx.beginPath();
+        ctx.strokeStyle = isMajor ? '#cbd5e1' : '#e2e8f0';
+        ctx.lineWidth = isMajor ? 1.2 : 0.8;
+        ctx.moveTo(0, s.y);
+        ctx.lineTo(width, s.y);
+        ctx.stroke();
+      }
     }
 
     // World origin crosshair (0,0)
     const origin = worldToScreen(0, 0, width, height);
-    ctx.strokeStyle = '#1e293b';
+    ctx.strokeStyle = '#94a3b8'; // Slate-400
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(origin.x - 12, origin.y);
-    ctx.lineTo(origin.x + 12, origin.y);
-    ctx.moveTo(origin.x, origin.y - 12);
-    ctx.lineTo(origin.x, origin.y + 12);
+    ctx.moveTo(origin.x - 14, origin.y);
+    ctx.lineTo(origin.x + 14, origin.y);
+    ctx.moveTo(origin.x, origin.y - 14);
+    ctx.lineTo(origin.x, origin.y + 14);
     ctx.stroke();
 
     ctx.restore();
@@ -279,52 +307,63 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({
       const angle = Math.atan2(dy, dx);
       const roadLengthPx = Math.sqrt(dx * dx + dy * dy);
 
-      // Standard lane width: 6m world * zoom
-      const laneWidthPx = Math.max(8, 6.0 * viewport.zoom);
+      // Realistic lane width: ~4.0m world width scaled by zoom factor
+      const laneWidthPx = Math.max(14, 4.0 * viewport.zoom * 3.2);
       const roadWidthPx = edge.lanes * laneWidthPx;
+      const shoulderPx = Math.max(3, 3.5 * viewport.zoom);
+      const totalWidthPx = roadWidthPx + shoulderPx * 2;
 
       const isSelected = selection?.type === 'edge' && selection.id === edge.id;
       const isHovered = hoveredEdgeId === edge.id;
 
-      // Base Asphalt Surface
       ctx.save();
       ctx.translate(p1.x, p1.y);
       ctx.rotate(angle);
 
-      // Congestion Heatmap or Base Asphalt Fill: derived strictly from real vehicle density
-      let roadColor = '#1e293b'; // standard clean slate-800 asphalt
+      // 1. Concrete Shoulder / Sidewalk Layer
+      ctx.fillStyle = '#94a3b8'; // concrete curb gray
+      ctx.fillRect(0, -totalWidthPx / 2, roadLengthPx, totalWidthPx);
+
+      // 2. Dark Charcoal Multi-Layered Asphalt Surface
+      let asphaltColor = '#1e293b'; // slate-800 deep asphalt
       const cong = simulationFrame?.metrics?.roadCongestion?.[edge.id];
       if (cong && cong.vehicleCount > 0) {
         const ratio = cong.volumeToCapacityRatio ?? cong.densityRatio ?? 0;
-        if (ratio < 0.3) roadColor = '#134e4a'; // dark teal / free flow
-        else if (ratio < 0.6) roadColor = '#854d0e'; // amber / moderate
-        else if (ratio < 0.85) roadColor = '#9a3412'; // orange / heavy
-        else roadColor = '#881337'; // red / severe congestion
+        if (ratio < 0.35) asphaltColor = '#1e293b'; // free flow charcoal
+        else if (ratio < 0.65) asphaltColor = '#334155'; // moderate flow slate
+        else if (ratio < 0.85) asphaltColor = '#7c2d12'; // approaching capacity orange-brown
+        else asphaltColor = '#881337'; // congested deep crimson
       }
 
-      ctx.fillStyle = roadColor;
+      ctx.fillStyle = asphaltColor;
       ctx.fillRect(0, -roadWidthPx / 2, roadLengthPx, roadWidthPx);
 
-      // Road Outline / Selection Highlight
+      // 3. Selection / Hover Outline
       if (isSelected) {
-        ctx.strokeStyle = '#34d399'; // emerald outline
-        ctx.lineWidth = 2.5;
-        ctx.strokeRect(0, -roadWidthPx / 2, roadLengthPx, roadWidthPx);
+        ctx.strokeStyle = '#10b981'; // emerald
+        ctx.lineWidth = 3;
+        ctx.strokeRect(-2, -totalWidthPx / 2 - 1, roadLengthPx + 4, totalWidthPx + 2);
       } else if (isHovered) {
-        ctx.strokeStyle = '#38bdf8'; // sky hover outline
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(0, -roadWidthPx / 2, roadLengthPx, roadWidthPx);
-      } else {
-        ctx.strokeStyle = '#334155'; // subtle border
-        ctx.lineWidth = 1;
-        ctx.strokeRect(0, -roadWidthPx / 2, roadLengthPx, roadWidthPx);
+        ctx.strokeStyle = '#0284c7'; // sky blue
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-1, -totalWidthPx / 2 - 0.5, roadLengthPx + 2, totalWidthPx + 1);
       }
 
-      // Lane dividers (dashed white markings)
+      // 4. Solid White Outer Road Margin Lines (curb edge lines)
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = Math.max(1.5, 1.8 * viewport.zoom);
+      ctx.beginPath();
+      ctx.moveTo(0, -roadWidthPx / 2);
+      ctx.lineTo(roadLengthPx, -roadWidthPx / 2);
+      ctx.moveTo(0, roadWidthPx / 2);
+      ctx.lineTo(roadLengthPx, roadWidthPx / 2);
+      ctx.stroke();
+
+      // 5. Bright White Dashed Lane Dividers (Multi-lane roads)
       if (edge.lanes > 1) {
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([8, 8]);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = Math.max(1.2, 1.5 * viewport.zoom);
+        ctx.setLineDash([12, 10]);
         for (let l = 1; l < edge.lanes; l++) {
           const laneY = -roadWidthPx / 2 + l * laneWidthPx;
           ctx.beginPath();
@@ -335,36 +374,56 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({
         ctx.setLineDash([]);
       }
 
-      // Directional Flow Chevron Arrows for One-Way
-      if (edge.isOneWay && roadLengthPx > 30) {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
-        const arrowSpacing = Math.max(60, 40 * viewport.zoom);
-        for (let dist = arrowSpacing / 2; dist < roadLengthPx - 20; dist += arrowSpacing) {
-          ctx.beginPath();
-          ctx.moveTo(dist, -2);
-          ctx.lineTo(dist + 6, 0);
-          ctx.lineTo(dist, 2);
-          ctx.fill();
+      // 6. Directional Chevrons / Flow Arrows painted on asphalt
+      if (roadLengthPx > 35) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+        const arrowSpacing = Math.max(65, 50 * viewport.zoom * 2.2);
+        const aL = Math.max(8, 7 * viewport.zoom);
+        const aW = Math.max(5, 4 * viewport.zoom);
+
+        for (let l = 0; l < edge.lanes; l++) {
+          const laneCenterY = -roadWidthPx / 2 + (l + 0.5) * laneWidthPx;
+          for (let dist = arrowSpacing * 0.5; dist < roadLengthPx - 15; dist += arrowSpacing) {
+            ctx.beginPath();
+            ctx.moveTo(dist - aL, laneCenterY - aW);
+            ctx.lineTo(dist, laneCenterY);
+            ctx.lineTo(dist - aL, laneCenterY + aW);
+            ctx.lineTo(dist - aL + 3, laneCenterY);
+            ctx.closePath();
+            ctx.fill();
+          }
         }
       }
 
-      // Road Closure Hazard Markings (Diagonal hazard stripes)
+      // 7. Closed Road Hazard Markings (Diagonal warning striping & barricades)
       if (edge.isClosed) {
         ctx.save();
-        ctx.strokeStyle = '#e11d48';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([6, 6]);
+        // Diagonal warning hatch
+        ctx.strokeStyle = '#facc15'; // warning yellow
+        ctx.lineWidth = 3;
+        ctx.setLineDash([10, 8]);
         ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(roadLengthPx, 0);
+        ctx.moveTo(0, -roadWidthPx / 2);
+        ctx.lineTo(roadLengthPx, roadWidthPx / 2);
+        ctx.moveTo(0, roadWidthPx / 2);
+        ctx.lineTo(roadLengthPx, -roadWidthPx / 2);
         ctx.stroke();
 
-        // Closed banner at midpoint
-        ctx.fillStyle = '#f43f5e';
-        ctx.font = `bold ${Math.max(10, 11 * viewport.zoom)}px Inter, sans-serif`;
+        // Barricade badge at midpoint
+        const badgeW = Math.max(70, 60 * viewport.zoom);
+        const badgeH = Math.max(20, 16 * viewport.zoom);
+        ctx.fillStyle = '#0f172a';
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([]);
+        ctx.fillRect(roadLengthPx / 2 - badgeW / 2, -badgeH / 2, badgeW, badgeH);
+        ctx.strokeRect(roadLengthPx / 2 - badgeW / 2, -badgeH / 2, badgeW, badgeH);
+
+        ctx.fillStyle = '#f87171';
+        ctx.font = `bold ${Math.max(10, 10 * viewport.zoom)}px Inter, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('CLOSED', roadLengthPx / 2, 0);
+        ctx.fillText('ROAD CLOSED', roadLengthPx / 2, 0);
         ctx.restore();
       }
 
@@ -385,8 +444,8 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({
       : worldToScreen(snapCoord(mouseWorldPos.x), snapCoord(mouseWorldPos.y), width, height);
 
     ctx.save();
-    ctx.strokeStyle = '#34d399';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 2.5;
     ctx.setLineDash([6, 6]);
     ctx.beginPath();
     ctx.moveTo(p1.x, p1.y);
@@ -405,47 +464,79 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({
       const isHovered = hoveredNodeId === node.id;
       const isEdgeStart = edgeStartNodeId === node.id;
 
-      const baseRadius = Math.max(7, 10 * viewport.zoom);
+      // Determine junction radius based on connecting roads
+      const connectingEdges = edges.filter((e) => e.fromNodeId === node.id || e.toNodeId === node.id);
+      const maxLanes = connectingEdges.reduce((max, e) => Math.max(max, e.lanes), 1);
+      const laneWidthPx = Math.max(14, 4.0 * viewport.zoom * 3.2);
+      const junctionRadius = Math.max(16, (maxLanes * laneWidthPx) / 2 + 5 * viewport.zoom);
 
-      // Node Outer Glow / Selection Ring
+      // 1. Outer Selection / Hover Ring
       if (isSelected || isEdgeStart) {
         ctx.beginPath();
-        ctx.arc(pos.x, pos.y, baseRadius + 4, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(52, 211, 153, 0.3)';
+        ctx.arc(pos.x, pos.y, junctionRadius + 6, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(16, 185, 129, 0.2)';
         ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = '#34d399';
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = '#10b981';
         ctx.stroke();
       } else if (isHovered) {
         ctx.beginPath();
-        ctx.arc(pos.x, pos.y, baseRadius + 3, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
+        ctx.arc(pos.x, pos.y, junctionRadius + 4, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(2, 132, 199, 0.15)';
         ctx.fill();
       }
 
-      // Node Junction Hub Fill
+      // 2. Paved Junction Hub (Matching Dark Asphalt Surface)
       ctx.beginPath();
-      ctx.arc(pos.x, pos.y, baseRadius, 0, Math.PI * 2);
-
-      if (node.controlType === 'fixed_signal') {
-        ctx.fillStyle = '#0284c7'; // cyan for fixed signal
-      } else if (node.controlType === 'adaptive_signal') {
-        ctx.fillStyle = '#059669'; // emerald for adaptive signal
-      } else {
-        ctx.fillStyle = '#334155'; // slate for unsignalized
-      }
+      ctx.arc(pos.x, pos.y, junctionRadius, 0, Math.PI * 2);
+      ctx.fillStyle = '#1e293b'; // asphalt charcoal
       ctx.fill();
 
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = '#f8fafc';
+      // Concrete junction curb edge
+      ctx.lineWidth = Math.max(2, 2.5 * viewport.zoom);
+      ctx.strokeStyle = '#94a3b8'; // concrete curb
       ctx.stroke();
 
-      // Node label (if zoom level is sufficient)
-      if (viewport.zoom >= 0.7) {
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '10px JetBrains Mono, monospace';
+      // 3. For Signalized Intersections: Yellow "Keep Clear" Box Junction Cross-Hatch
+      if (node.controlType === 'fixed_signal' || node.controlType === 'adaptive_signal') {
+        ctx.save();
+        const boxSize = junctionRadius * 1.3;
+        ctx.strokeStyle = 'rgba(234, 179, 8, 0.5)'; // yellow box marking
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([4, 3]);
+
+        ctx.strokeRect(pos.x - boxSize / 2, pos.y - boxSize / 2, boxSize, boxSize);
+        ctx.beginPath();
+        ctx.moveTo(pos.x - boxSize / 2, pos.y - boxSize / 2);
+        ctx.lineTo(pos.x + boxSize / 2, pos.y + boxSize / 2);
+        ctx.moveTo(pos.x - boxSize / 2, pos.y + boxSize / 2);
+        ctx.lineTo(pos.x + boxSize / 2, pos.y - boxSize / 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // 4. Center Junction Hub Indicator Pill
+      const centerBadgeRadius = Math.max(6, 6 * viewport.zoom);
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, centerBadgeRadius, 0, Math.PI * 2);
+      if (node.controlType === 'fixed_signal') {
+        ctx.fillStyle = '#0284c7'; // cyan fixed signal
+      } else if (node.controlType === 'adaptive_signal') {
+        ctx.fillStyle = '#059669'; // emerald adaptive signal
+      } else {
+        ctx.fillStyle = '#64748b'; // slate unsignalized
+      }
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // 5. Node ID Typography
+      if (viewport.zoom >= 0.65) {
+        ctx.fillStyle = '#475569';
+        ctx.font = '600 10px Inter, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(node.id, pos.x, pos.y + baseRadius + 12);
+        ctx.fillText(node.id, pos.x, pos.y + junctionRadius + 14);
       }
     }
 
@@ -469,7 +560,6 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({
         continue;
       }
 
-      // Position signal and stop bar 12m before intersection node center
       const dx = targetNode.x - fromNode.x;
       const dy = targetNode.y - fromNode.y;
       const length = Math.sqrt(dx * dx + dy * dy);
@@ -477,81 +567,124 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({
 
       const unitX = dx / length;
       const unitY = dy / length;
-      const stopDistance = Math.max(10, length - 12);
 
+      // Stop distance: Position stop bar 14m before node center
+      const stopDistance = Math.max(10, length - 14);
       const stopWorldX = fromNode.x + unitX * stopDistance;
       const stopWorldY = fromNode.y + unitY * stopDistance;
 
-      // Normal vector pointing perpendicular to road
       const normalX = -unitY;
       const normalY = unitX;
-      const laneWidth = 6.0;
-      const roadWidthHalf = (edge.lanes * laneWidth) / 2;
-      const roadsideDist = roadWidthHalf + 5.0;
+      const laneWidthPx = Math.max(14, 4.0 * viewport.zoom * 3.2);
+      const roadWidthHalfMeters = (edge.lanes * 4.0) / 2;
 
-      // 1. Draw crisp white stop line across the approach lanes
+      // 1. Crisp Solid White Stop Line painted across the approach lanes
       const stopP1 = worldToScreen(
-        stopWorldX - normalX * roadWidthHalf,
-        stopWorldY - normalY * roadWidthHalf,
+        stopWorldX - normalX * roadWidthHalfMeters,
+        stopWorldY - normalY * roadWidthHalfMeters,
         width,
         height
       );
       const stopP2 = worldToScreen(
-        stopWorldX + normalX * roadWidthHalf,
-        stopWorldY + normalY * roadWidthHalf,
+        stopWorldX + normalX * roadWidthHalfMeters,
+        stopWorldY + normalY * roadWidthHalfMeters,
         width,
         height
       );
+
       ctx.save();
-      ctx.strokeStyle = '#f8fafc';
-      ctx.lineWidth = Math.max(2, 2.5 * viewport.zoom);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = Math.max(3.5, 3.5 * viewport.zoom);
       ctx.beginPath();
       ctx.moveTo(stopP1.x, stopP1.y);
       ctx.lineTo(stopP2.x, stopP2.y);
       ctx.stroke();
+
+      // 2. Pedestrian Zebra Crosswalk Markings between stop line and junction
+      const zebraWorldX = fromNode.x + unitX * (length - 8);
+      const zebraWorldY = fromNode.y + unitY * (length - 8);
+      const zebraP1 = worldToScreen(
+        zebraWorldX - normalX * roadWidthHalfMeters,
+        zebraWorldY - normalY * roadWidthHalfMeters,
+        width,
+        height
+      );
+      const zebraP2 = worldToScreen(
+        zebraWorldX + normalX * roadWidthHalfMeters,
+        zebraWorldY + normalY * roadWidthHalfMeters,
+        width,
+        height
+      );
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.lineWidth = Math.max(2, 2.0 * viewport.zoom);
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.moveTo(zebraP1.x, zebraP1.y);
+      ctx.lineTo(zebraP2.x, zebraP2.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
       ctx.restore();
 
-      // 2. Position signal head housing on roadside
-      const finalSigWorldX = stopWorldX + normalX * roadsideDist;
-      const finalSigWorldY = stopWorldY + normalY * roadsideDist;
+      // 3. Realistic 3-Aspect Traffic Signal Head mounted on roadside
+      const roadsideDistMeters = roadWidthHalfMeters + 4.5;
+      const finalSigWorldX = stopWorldX + normalX * roadsideDistMeters;
+      const finalSigWorldY = stopWorldY + normalY * roadsideDistMeters;
       const p = worldToScreen(finalSigWorldX, finalSigWorldY, width, height);
 
-      // Signal Light Aspect Color
-      let bulbColor = '#ef4444'; // Red
-      let shadowColor = 'rgba(239, 68, 68, 0.85)';
-      if (sig.state === 'GREEN') {
-        bulbColor = '#22c55e';
-        shadowColor = 'rgba(34, 197, 94, 0.85)';
-      } else if (sig.state === 'YELLOW') {
-        bulbColor = '#f59e0b';
-        shadowColor = 'rgba(245, 158, 11, 0.85)';
-      }
-
-      // Draw Signal Head Housing (square signal box)
-      const bulbRadius = Math.max(6, 6.0 * viewport.zoom);
-      const boxSize = bulbRadius * 2.4;
+      const bulbR = Math.max(4, 4.5 * viewport.zoom);
+      const headW = bulbR * 2.4;
+      const headH = bulbR * 6.5;
 
       ctx.save();
-      ctx.fillStyle = '#020617';
-      ctx.strokeStyle = '#475569';
-      ctx.lineWidth = 1.5;
-      ctx.fillRect(p.x - boxSize / 2, p.y - boxSize / 2, boxSize, boxSize);
-      ctx.strokeRect(p.x - boxSize / 2, p.y - boxSize / 2, boxSize, boxSize);
+      // Signal Head Housing (Black metal chassis with yellow outline)
+      ctx.fillStyle = '#0f172a';
+      ctx.strokeStyle = '#eab308';
+      ctx.lineWidth = 1.2;
+      ctx.fillRect(p.x - headW / 2, p.y - headH / 2, headW, headH);
+      ctx.strokeRect(p.x - headW / 2, p.y - headH / 2, headW, headH);
 
-      // Glowing Lamp Bulb
-      ctx.shadowBlur = 12;
-      ctx.shadowColor = shadowColor;
+      // Three Lenses: Top = Red, Middle = Yellow, Bottom = Green
+      const redY = p.y - headH / 3 + 1;
+      const yellowY = p.y;
+      const greenY = p.y + headH / 3 - 1;
+
+      const isGreen = sig.state === 'GREEN';
+      const isYellow = sig.state === 'YELLOW';
+      const isRed = !isGreen && !isYellow;
+
+      // RED Lens
       ctx.beginPath();
-      ctx.arc(p.x, p.y, bulbRadius, 0, Math.PI * 2);
-      ctx.fillStyle = bulbColor;
+      ctx.arc(p.x, redY, bulbR, 0, Math.PI * 2);
+      ctx.fillStyle = isRed ? '#ef4444' : '#450a0a';
+      if (isRed) {
+        ctx.shadowColor = '#ef4444';
+        ctx.shadowBlur = 10;
+      }
       ctx.fill();
       ctx.shadowBlur = 0;
 
-      // Bright inner core
+      // YELLOW Lens
       ctx.beginPath();
-      ctx.arc(p.x, p.y, bulbRadius * 0.4, 0, Math.PI * 2);
-      ctx.fillStyle = '#ffffff';
+      ctx.arc(p.x, yellowY, bulbR, 0, Math.PI * 2);
+      ctx.fillStyle = isYellow ? '#f59e0b' : '#451a03';
+      if (isYellow) {
+        ctx.shadowColor = '#f59e0b';
+        ctx.shadowBlur = 10;
+      }
       ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // GREEN Lens
+      ctx.beginPath();
+      ctx.arc(p.x, greenY, bulbR, 0, Math.PI * 2);
+      ctx.fillStyle = isGreen ? '#22c55e' : '#052e16';
+      if (isGreen) {
+        ctx.shadowColor = '#22c55e';
+        ctx.shadowBlur = 10;
+      }
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
       ctx.restore();
     }
     ctx.restore();
@@ -568,35 +701,76 @@ export const CanvasViewport: React.FC<CanvasViewportProps> = ({
       ctx.translate(pos.x, pos.y);
       ctx.rotate(v.angle);
 
-      // Vehicle Dimensions in pixels: clearly visible miniature vehicles
-      const carLength = Math.max(14, 12 * viewport.zoom);
-      const carWidth = Math.max(7, 6 * viewport.zoom);
+      // Determine Vehicle Classification (Car vs Bus/Truck) from ID hash
+      const hash = hashVehicleId(v.id);
+      const isTruckOrBus = hash % 7 === 0;
 
-      // Vehicle color by velocity
-      let carColor = '#38bdf8'; // Free flow cruising (sky blue)
-      if (v.velocity < 1.0) {
-        carColor = '#f43f5e'; // Stopped in queue (bright rose/red)
-      } else if (v.velocity < 6.0) {
-        carColor = '#fbbf24'; // Slowing down (amber)
+      const carLength = isTruckOrBus 
+        ? Math.max(26, 20 * viewport.zoom) 
+        : Math.max(18, 14 * viewport.zoom);
+      const carWidth = isTruckOrBus 
+        ? Math.max(10, 8 * viewport.zoom) 
+        : Math.max(9, 7 * viewport.zoom);
+
+      // Distinct, vibrant vehicle color
+      const bodyColor = VIBRANT_CAR_PALETTE[hash % VIBRANT_CAR_PALETTE.length];
+
+      // 1. Soft Drop Shadow for Realistic 3D Depth
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.beginPath();
+      ctx.roundRect(-carLength / 2 + 1.5, -carWidth / 2 + 1.5, carLength, carWidth, 2);
+      ctx.fill();
+
+      // 2. Vehicle Body (Rounded rectangle)
+      ctx.fillStyle = bodyColor;
+      ctx.beginPath();
+      ctx.roundRect(-carLength / 2, -carWidth / 2, carLength, carWidth, 2);
+      ctx.fill();
+
+      // Subtle metallic body highlight outline
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // 3. Dark Tinted Windshield & Glass Windows
+      ctx.fillStyle = '#0f172a';
+      if (isTruckOrBus) {
+        // Truck/Bus large windshield & rear window
+        ctx.fillRect(-carLength * 0.4, -carWidth * 0.38, carLength * 0.25, carWidth * 0.76);
+        ctx.fillRect(carLength * 0.15, -carWidth * 0.38, carLength * 0.25, carWidth * 0.76);
+      } else {
+        // Passenger car windshield and rear glass
+        ctx.fillRect(-carLength * 0.12, -carWidth * 0.35, carLength * 0.5, carWidth * 0.7);
+        // Roof panel in body color
+        ctx.fillStyle = bodyColor;
+        ctx.fillRect(-carLength * 0.05, -carWidth * 0.28, carLength * 0.3, carWidth * 0.56);
       }
 
-      // Car Body
-      ctx.fillStyle = carColor;
-      ctx.fillRect(-carLength / 2, -carWidth / 2, carLength, carWidth);
-
-      // Windshield & roof
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(-carLength * 0.1, -carWidth * 0.35, carLength * 0.45, carWidth * 0.7);
-
-      // Headlights (front)
-      ctx.fillStyle = '#ffffff';
+      // 4. Front Headlights (Warm white/yellow)
+      ctx.fillStyle = '#fef08a';
       ctx.fillRect(carLength / 2 - 2, -carWidth / 2 + 1, 2, 2);
       ctx.fillRect(carLength / 2 - 2, carWidth / 2 - 3, 2, 2);
 
-      // Brake lights (rear)
-      ctx.fillStyle = v.velocity < 1.0 ? '#ef4444' : '#991b1b';
-      ctx.fillRect(-carLength / 2, -carWidth / 2 + 1, 2, 2);
-      ctx.fillRect(-carLength / 2, carWidth / 2 - 3, 2, 2);
+      // Subtle forward headlight illumination beam
+      ctx.fillStyle = 'rgba(254, 240, 138, 0.15)';
+      ctx.beginPath();
+      ctx.moveTo(carLength / 2, -carWidth / 2 + 1);
+      ctx.lineTo(carLength / 2 + 12, -carWidth / 2 - 4);
+      ctx.lineTo(carLength / 2 + 12, carWidth / 2 + 4);
+      ctx.lineTo(carLength / 2, carWidth / 2 - 3);
+      ctx.closePath();
+      ctx.fill();
+
+      // 5. Rear Taillights & Brake Lights
+      const isBraking = v.velocity < 1.0;
+      ctx.fillStyle = isBraking ? '#ef4444' : '#991b1b';
+      if (isBraking) {
+        ctx.shadowColor = '#ef4444';
+        ctx.shadowBlur = 6;
+      }
+      ctx.fillRect(-carLength / 2, -carWidth / 2 + 1, 2, 2.5);
+      ctx.fillRect(-carLength / 2, carWidth / 2 - 3.5, 2, 2.5);
+      ctx.shadowBlur = 0;
 
       ctx.restore();
     }

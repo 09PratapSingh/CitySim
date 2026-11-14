@@ -36,9 +36,24 @@ export function useSocketSimulation(): UseSocketSimulationReturn {
   const [speed, setSpeed] = useState<number>(1.0);
 
   useEffect(() => {
-    // Connect to Socket.IO server (via Vite proxy or direct)
-    const socket = io({
-      transports: ['websocket', 'polling'],
+    // Determine socket target URL dynamically:
+    // If in dev mode on Vite (port 3000), point to backend at port 5000.
+    // If in production or served by Express, connect directly to origin.
+    const getSocketUrl = () => {
+      if (typeof window === 'undefined') return undefined;
+      if (window.location.port === '3000') {
+        return `${window.location.protocol}//${window.location.hostname}:5000`;
+      }
+      return undefined;
+    };
+
+    const socket = io(getSocketUrl(), {
+      transports: ['polling', 'websocket'],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
       autoConnect: true,
     });
     socketRef.current = socket;
@@ -48,9 +63,18 @@ export function useSocketSimulation(): UseSocketSimulationReturn {
       setError(null);
     });
 
+    socket.io.on('reconnect', () => {
+      setIsConnected(true);
+      setError(null);
+    });
+
     socket.on('disconnect', () => {
       setIsConnected(false);
       setIsRunning(false);
+    });
+
+    socket.on('connect_error', (_err) => {
+      setIsConnected(false);
     });
 
     socket.on('simulation_started', () => {

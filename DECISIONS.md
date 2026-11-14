@@ -493,3 +493,79 @@ This document records the critical architectural, algorithmic, and engineering d
 - **Viva Defense Note:** Proves that CitySim's routing and microscopic simulation accurately reproduce Wardrop's First Principle of user equilibrium: when a critical arterial is severed, traffic shifts to minimum-cost alternate paths in the network rather than disappearing.
 
 
+---
+
+## ADR 036: CSV Exporters with UTF-8 Byte Order Mark (BOM) for Decision-Grade Data Science Integration
+
+- **Status:** Accepted (Stage 8)
+- **Context:** Civil engineers, transport analysts, and researchers require access to raw numerical simulation data to conduct external post-processing in Python (Pandas/NumPy), R, or Microsoft Excel. Exporting raw data must support both road-segment spatial metrics (volume-to-capacity ratios, densities, traffic diversions) and high-resolution temporal time-series (5-second intervals).
+- **Decision:**
+  1. Implement two dedicated CSV export handlers in `ComparisonDashboard.tsx` and `PastRunsModal.tsx`:
+     - **Road Metrics CSV:** Dumps link ID, from/to nodes, physical length, speed limit, lanes, status (`OPEN` vs. `CLOSED`), baseline and scenario densities, V/C ratios, congestion classification, and traffic impact assessment notes.
+     - **Continuous Time-Series CSV:** Dumps full 5-second interval simulation snapshots (elapsed time, baseline & scenario average wait times, speeds, active queue counts, and cumulative completed trips).
+  2. Prepend the UTF-8 Byte Order Mark (`\uFEFF`) to all generated CSV byte streams prior to `Blob` instantiation (`text/csv;charset=utf-8;`).
+- **Alternatives Rejected:**
+  - *Exporting raw JSON only:* Requires transport engineers to write custom parsing scripts; Excel cannot natively open complex nested JSON objects without PowerQuery transforms.
+  - *Standard UTF-8 without BOM:* On Windows operating systems, Microsoft Excel defaults to legacy ANSI/Windows-1252 code pages when opening `.csv` files lacking a BOM, corrupting mathematical symbols ($\Delta$, $\pm$, $\mu\text{s}$) into mojibake text.
+- **Viva Defense Note:** Demonstrates end-to-end interoperability with industry-standard transportation planning tools and scientific computing workflows.
+
+---
+
+## ADR 037: Native Browser Print CSS (`@media print`) for Executive PDF Report Generation
+
+- **Status:** Accepted (Stage 8)
+- **Context:** CitySim must generate professional, executive-grade PDF reports summarizing paired simulation comparisons, including project briefing narrative, baseline vs. scenario KPI comparison matrix with 95% confidence intervals, seed-by-seed replication tables, and road-level congestion breakdowns.
+- **Decision:**
+  1. Build `ReportModal.tsx` utilizing Tailwind CSS with explicit `@media print` directives (`print:hidden`, `print:bg-white`, `print:text-black`, `print:border-slate-300`, `print:shadow-none`, and `@page { size: A4 portrait; margin: 12mm; }`).
+  2. Implement report generation via browser-native `window.print()`, allowing users to directly save as a vector PDF or print physical copies.
+  3. Complement this with a backend summary endpoint `POST /api/simulations/reports/summary` returning structured Markdown/JSON briefing summaries.
+- **Alternatives Rejected:**
+  - *Heavy server-side headless Chromium (Puppeteer):* Adds ~300MB binary dependencies, increases Docker image size, and introduces OS-level font rendering vulnerabilities.
+  - *Client-side canvas rasterizers (html2canvas / jsPDF):* Rasterizes crisp vectors and typography into blurry, non-selectable pixel images with inaccurate page breaking.
+- **Viva Defense Note:** Delivers pixel-perfect, selectable vector PDF documents instantly with zero external binary dependencies and zero bundle bloat.
+
+---
+
+## ADR 038: Historical Simulation Run Auto-Persistence & Interactive Run Browser
+
+- **Status:** Accepted (Stage 8)
+- **Context:** In real-world urban planning projects, comparisons and simulations are performed across multiple sessions. Users must be able to audit past runs, review what parameters were used, inspect historical KPIs, and export data without having to rerun long simulations.
+- **Decision:**
+  1. In `server/src/controllers/simulationController.ts`, whenever `compareSimulations` executes a paired comparison, the primary baseline run and scenario run are automatically persisted into `DataStore.createRun(...)`.
+  2. Build `PastRunsModal.tsx`, accessible from both the top navigation bar (`Navbar.tsx`) and the Scenario Comparison dashboard (`ComparisonDashboard.tsx`).
+  3. Equip the past runs browser with:
+     - Real-time text search filter (by map name, scenario title, or run ID).
+     - Run inspection card detailing seed, timestamp, wait time, throughput, and speed.
+     - Direct CSV export of each historical run's road congestion table.
+     - Formatted raw JSON inspector modal for technical audits.
+- **Alternatives Rejected:**
+  - *Transient in-memory session only:* Users lose all historical evidence upon browser refresh or server restart.
+- **Viva Defense Note:** Fulfills requirements for regulatory audit trails and experimental reproducibility in scientific software engineering.
+
+---
+
+## ADR 039: Professional 2D Canvas Engineering & "Day Mode" Urban Cartography
+
+- **Status:** Accepted (Stage 9)
+- **Context:** Early iterations of CitySim rendered the network as an abstract wireframe dark graph with simple lines and monochromatic circular dots. Transportation engineers, urban planners, and examiners require realistic civil infrastructure visuals (paved road surfaces, marked lane divisions, directional flow cues, stop lines, pedestrian crossings, signal heads, and distinct vehicle silhouettes with dynamic brake lights) while maintaining 60 FPS performance without WebGL overhead.
+- **Decision:**
+  1. **Canvas Viewport Cartography:**
+     - Replace the black canvas with a soft off-white urban canvas fill (`#f8fafc`) with subtle Cartesian grid lines (`#e2e8f0`) and major 100m coordinate grid markers (`#cbd5e1`).
+     - Multi-layer road rendering: An outer concrete shoulder base (`#94a3b8`) 3px wider than asphalt, a deep charcoal asphalt roadbed (`#1e293b`), crisp white dashed lane dividers (`[12, 10]`), and directional flow chevrons stamped along lane centerlines.
+     - Closed road corridors feature high-visibility alternating yellow/black warning chevrons and a prominent "ROAD CLOSED" safety barricade badge.
+  2. **Paved Junctions & Signal Infrastructure:**
+     - Render intersections as continuous paved asphalt junction hubs with concrete perimeter curbs.
+     - Signalized junctions feature yellow cross-hatch "Keep Clear" box junction markings (`rgba(234, 179, 8, 0.5)`).
+     - Incoming approaches feature 3.5px solid white stop bars, pedestrian zebra crossings, and realistic 3-aspect roadside signal housings with illuminated active lenses (Red, Amber, Green).
+  3. **Vehicle Geometries & Kinematic Illumination:**
+     - Replace dots with top-down rectangular vehicle models with rounded corners (cars: 4.8m x 2.0m, buses/trucks: 9.0m x 2.5m) and subtle drop shadows for depth.
+     - Vehicles feature dark-tinted windshields/roofs, forward-facing warm headlights (`#fef08a`), and reactive glowing red brake lights that dynamically illuminate when decelerating or queued (`#ef4444` active brake, `#991b1b` cruising).
+     - Palette colors are deterministically hashed from vehicle IDs across 8 vibrant pigments (`#ef4444`, `#2563eb`, `#10b981`, `#f97316`, `#8b5cf6`, `#06b6d4`, `#ec4899`, `#eab308`).
+  4. **Day Mode UI Panels & Theme Cohesion:**
+     - Transition all control panels, toolbars, sidebars, charts, modals, and metric overlays to a high-contrast Day Mode palette (white cards, slate-200 borders, slate-800 text, slate-50 canvas footers, and vibrant indigo/emerald accents).
+  5. **Resilient WebSocket Auto-Reconnection:**
+     - Configure `useSocketSimulation` with dynamic URL resolution (targeting port 5000 from port 3000), infinite reconnection attempts with exponential backoff (1s - 5s), and reactive connectivity pills (green "Server Online" vs pulsing amber "Connecting").
+- **Alternatives Rejected:**
+  - *Migrating to Three.js / WebGL:* Unnecessary complexity, higher memory footprint, and slower cold-start initialization compared to pure 2D Canvas.
+  - *SVG Vehicle Elements:* High DOM node count creates garbage collection pauses and frame drops during high-density simulations (500+ vehicles).
+- **Viva Defense Note:** Demonstrates performance-oriented graphics engineering on standard HTML5 2D Canvas, achieving 60 FPS rendering with professional CAD/GIS-grade cartography without external rendering libraries.

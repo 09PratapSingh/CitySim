@@ -9,7 +9,7 @@ import type {
 } from '../types.ts';
 
 interface CanvasViewportProps {
-  activeMode: 'editor' | 'simulation';
+  activeMode: 'editor' | 'simulation' | 'comparison';
   currentTool: EditorTool;
   gridSnap: boolean;
   roadMode: 'two-way' | 'one-way';

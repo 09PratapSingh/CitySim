@@ -212,18 +212,26 @@ export interface SimulationConfig {
 export interface TimeSeriesSnapshot {
   /** Simulation timestamp in seconds */
   timestamp: number;
+  time?: number;
   /** Active vehicles currently in network */
   activeVehicles: number;
+  activeVehiclesCount?: number;
   /** Cumulative completed vehicles */
   completedVehicles: number;
+  completedVehiclesCount?: number;
   /** Instantaneous mean speed across network in m/s */
   currentAvgSpeed: number;
+  /** Instantaneous mean speed in km/h */
+  averageSpeed?: number;
   /** Cumulative mean stopped delay in seconds */
   currentAvgWaitTime: number;
+  averageWaitTime?: number;
   /** Overall network-wide volume-to-capacity saturation ratio [0, 1] */
   networkCongestionRatio: number;
   /** Realized throughput rate in vehicles/hour */
   currentThroughputRate: number;
+  throughputPerHour?: number;
+  maxQueueLength?: number;
 }
 
 export type CongestionLevel = 'FREE_FLOW' | 'MODERATE' | 'HEAVY' | 'CONGESTED';

@@ -91,17 +91,17 @@ This checklist tracks the stage-wise progress of the **CitySim: Traffic Scenario
 ---
 
 ## Stage 7: Scenario Modification & Before/After Comparison
-- ⬜ 7.1 Build Scenario Editor UI:
+- ✅ 7.1 Build Scenario Editor UI:
   - Select a saved Base Map
   - Apply modifications: road closure toggle, signal cycle adjustment, adaptive toggle, demand surge
-- ⬜ 7.2 Implement Dual-Run Execution Engine:
+- ✅ 7.2 Implement Dual-Run Execution Engine:
   - Run Baseline (Scenario A) and Modified (Scenario B) with identical seed
   - Fetch or stream results simultaneously
-- ⬜ 7.3 Build Side-by-Side Comparison Dashboard:
+- ✅ 7.3 Build Side-by-Side Comparison Dashboard:
   - KPI delta cards ($\Delta$ Average Delay, $\Delta$ Travel Time, $\Delta$ Throughput)
   - Comparative Recharts graphs (Delay over time, Queue length distribution, Hourly throughput)
   - Synchronized dual-canvas or before/after visual playback toggle
-- ⬜ 7.4 Stage 7 verification and scenario test run.
+- ✅ 7.4 Stage 7 verification and scenario test run.
 
 ---
 

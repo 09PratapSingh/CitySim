@@ -81,6 +81,21 @@ export function setupSimulationSockets(io: SocketIOServer): void {
                 }
               }
             }
+            if (Array.isArray(scenario.modifications?.speedLimitOverrides)) {
+              for (const override of scenario.modifications.speedLimitOverrides) {
+                const edge = graph.getEdge(override.edgeId);
+                if (edge) edge.speedLimit = override.speedLimit;
+              }
+            }
+            if (Array.isArray(scenario.modifications?.signalOverrides)) {
+              for (const sigOverride of scenario.modifications.signalOverrides) {
+                const node = graph.getNode(sigOverride.nodeId);
+                if (node) {
+                  node.controlType = sigOverride.controlType;
+                  if (node.signalConfig) node.signalConfig.type = sigOverride.controlType;
+                }
+              }
+            }
           }
         }
 

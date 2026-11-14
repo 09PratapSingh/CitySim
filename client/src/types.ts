@@ -119,3 +119,138 @@ export interface SelectedElement {
   type: 'node' | 'edge';
   id: string;
 }
+
+export interface ScenarioModifications {
+  closedEdgeIds: string[];
+  signalOverrides?: Array<{
+    nodeId: string;
+    controlType: IntersectionControlType;
+    greenDuration?: number;
+  }>;
+  speedLimitOverrides?: Array<{
+    edgeId: string;
+    speedLimit: number;
+  }>;
+}
+
+export interface ScenarioData {
+  id?: string;
+  _id?: string;
+  baseMapId: string;
+  name: string;
+  description?: string;
+  seed: number;
+  demandMultiplier: number;
+  modifications: ScenarioModifications;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+}
+
+export interface TimeSeriesSnapshot {
+  time: number;
+  activeVehiclesCount: number;
+  completedVehiclesCount: number;
+  throughputPerHour: number;
+  averageSpeed: number;
+  averageTravelTime: number;
+  averageWaitTime: number;
+  maxQueueLength: number;
+}
+
+export interface RunData {
+  id?: string;
+  _id?: string;
+  scenarioId?: string;
+  baseMapId: string;
+  scenarioName?: string;
+  seed: number;
+  durationSeconds: number;
+  aggregateMetrics: {
+    currentTime: number;
+    activeVehiclesCount: number;
+    completedVehiclesCount: number;
+    totalSpawned: number;
+    throughputPerHour: number;
+    averageSpeed: number;
+    averageTravelTime: number;
+    averageWaitTime: number;
+    maxQueueLength: number;
+    totalDelayHours?: number;
+    travelTimeIndex?: number;
+  };
+  timeSeries: TimeSeriesSnapshot[];
+  roadCongestion: Record<string, {
+    edgeId?: string;
+    vehicleCount: number;
+    density: number;
+    densityRatio: number;
+    volumeToCapacityRatio: number;
+    averageSpeed?: number;
+    queueLength?: number;
+    congestionLevel: 'FREE_FLOW' | 'MODERATE' | 'HEAVY' | 'CONGESTED';
+  }>;
+  status: 'completed' | 'failed';
+  createdAt?: string | Date;
+}
+
+export interface ComparisonDeltas {
+  deltaAvgWaitTime: number;
+  deltaAvgWaitTimeStdDev?: number;
+  pctChangeAvgWaitTime: number;
+
+  deltaAvgTravelTime: number;
+  deltaAvgTravelTimeStdDev?: number;
+  pctChangeAvgTravelTime: number;
+
+  deltaThroughput: number;
+  deltaThroughputStdDev?: number;
+  pctChangeThroughput: number;
+
+  deltaAvgSpeed: number;
+  deltaAvgSpeedStdDev?: number;
+
+  deltaCompleted: number;
+  deltaCompletedStdDev?: number;
+
+  deltaSpawned: number;
+  deltaMaxQueue: number;
+  warmupSeconds?: number;
+  replicationsCount?: number;
+  seedsUsed?: number[];
+}
+
+export interface ReplicationItem {
+  seed: number;
+  baselineWait: number;
+  scenarioWait: number;
+  deltaWait: number;
+  baselineThroughput: number;
+  scenarioThroughput: number;
+  deltaThroughput: number;
+  baselineTravel: number;
+  scenarioTravel: number;
+  deltaTravel: number;
+  baselineSpeed: number;
+  scenarioSpeed: number;
+  deltaSpeed: number;
+}
+
+export interface ComparativeTimeSeriesPoint {
+  time: number;
+  baselineWaitTime: number;
+  scenarioWaitTime: number;
+  baselineSpeed: number;
+  scenarioSpeed: number;
+  baselineActiveVehicles: number;
+  scenarioActiveVehicles: number;
+  baselineCompleted: number;
+  scenarioCompleted: number;
+}
+
+export interface SimulationComparisonResult {
+  baseline: RunData;
+  scenario: RunData;
+  deltas: ComparisonDeltas;
+  comparativeTimeSeries: ComparativeTimeSeriesPoint[];
+  replications?: ReplicationItem[];
+}

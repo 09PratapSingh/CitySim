@@ -88,15 +88,20 @@ export class MetricsCollector {
     for (const v of activeVehicles) {
       sumSpeed += v.velocity;
     }
-    const currentAvgSpeed =
+    const currentAvgSpeedMs =
       activeVehicles.length > 0 ? sumSpeed / activeVehicles.length : 0;
+    const currentAvgSpeedKmh = currentAvgSpeedMs * 3.6;
 
+    // Stopped wait time: include both completed vehicles and active waiting vehicles
     let sumWait = 0;
     for (const v of completedVehicles) {
       sumWait += v.totalWaitTime;
     }
-    const currentAvgWait =
-      completedVehicles.length > 0 ? sumWait / completedVehicles.length : 0;
+    for (const v of activeVehicles) {
+      sumWait += v.totalWaitTime;
+    }
+    const totalVehicles = completedVehicles.length + activeVehicles.length;
+    const currentAvgWait = totalVehicles > 0 ? sumWait / totalVehicles : 0;
 
     // Overall network congestion ratio
     const congestionMap = this.computeSegmentCongestion(activeVehicles);
@@ -108,16 +113,25 @@ export class MetricsCollector {
     const networkCongestionRatio =
       edgeCount > 0 ? totalDensity / edgeCount : 0;
 
+    const currentThroughput = Number(
+      (completedVehicles.length / elapsedHours).toFixed(1)
+    );
+
     const snapshot: TimeSeriesSnapshot = {
       timestamp: Number(currentTime.toFixed(1)),
+      time: Number(currentTime.toFixed(1)),
       activeVehicles: activeVehicles.length,
+      activeVehiclesCount: activeVehicles.length,
       completedVehicles: completedVehicles.length,
-      currentAvgSpeed: Number(currentAvgSpeed.toFixed(2)),
+      completedVehiclesCount: completedVehicles.length,
+      currentAvgSpeed: Number(currentAvgSpeedMs.toFixed(2)),
+      averageSpeed: Number(currentAvgSpeedKmh.toFixed(2)),
       currentAvgWaitTime: Number(currentAvgWait.toFixed(2)),
+      averageWaitTime: Number(currentAvgWait.toFixed(2)),
       networkCongestionRatio: Number(networkCongestionRatio.toFixed(3)),
-      currentThroughputRate: Number(
-        (completedVehicles.length / elapsedHours).toFixed(1)
-      ),
+      currentThroughputRate: currentThroughput,
+      throughputPerHour: currentThroughput,
+      maxQueueLength: this.peakQueueLength,
     };
 
     this.timeSeries.push(snapshot);
@@ -125,25 +139,33 @@ export class MetricsCollector {
 
   /**
    * Calculates comprehensive metrics and KPI summaries.
+   * Supports an optional warmup period (e.g. first 60s) to eliminate cold-start transient bias.
    */
   public compileMetrics(
     currentTime: number,
     totalSpawned: number,
     activeVehicles: Vehicle[],
-    completedVehicles: Vehicle[]
+    completedVehicles: Vehicle[],
+    warmupSeconds: number = 0
   ): ComprehensiveMetrics {
-    const elapsedSeconds = Math.max(0.001, currentTime);
-    const elapsedHours = elapsedSeconds / 3600;
-    const completedCount = completedVehicles.length;
+    const effectiveElapsedSeconds = Math.max(0.001, currentTime - warmupSeconds);
+    const effectiveElapsedHours = effectiveElapsedSeconds / 3600;
+
+    // In steady-state evaluation, filter completed vehicles to post-warmup window
+    const relevantCompleted = warmupSeconds > 0
+      ? completedVehicles.filter((v) => (v.completionTime ?? 0) >= warmupSeconds)
+      : completedVehicles;
+    const completedCount = relevantCompleted.length;
 
     // Travel time and stopped delay calculations
     let sumTravelTime = 0;
     let sumWaitTime = 0;
     let sumFreeFlowTime = 0;
 
-    for (const v of completedVehicles) {
-      const travelTime = (v.completionTime ?? currentTime) - v.spawnTime;
-      sumTravelTime += travelTime;
+    for (const v of relevantCompleted) {
+      const effectiveSpawn = warmupSeconds > 0 ? Math.max(warmupSeconds, v.spawnTime) : v.spawnTime;
+      const travelTime = (v.completionTime ?? currentTime) - effectiveSpawn;
+      sumTravelTime += Math.max(0, travelTime);
       sumWaitTime += v.totalWaitTime;
 
       // Free-flow travel time along vehicle's traversed route
@@ -156,7 +178,8 @@ export class MetricsCollector {
     let activeTravelTime = 0;
     for (const v of activeVehicles) {
       activeWaitTime += v.totalWaitTime;
-      activeTravelTime += Math.max(0, currentTime - v.spawnTime);
+      const effectiveSpawn = warmupSeconds > 0 ? Math.max(warmupSeconds, v.spawnTime) : v.spawnTime;
+      activeTravelTime += Math.max(0, currentTime - effectiveSpawn);
     }
 
     const totalEvaluated = completedCount + activeVehicles.length;
@@ -194,7 +217,7 @@ export class MetricsCollector {
     const safeAvgSpeed = Number((isNaN(averageSpeed) ? 0 : averageSpeed).toFixed(2));
     const safeAvgWait = Number((isNaN(averageWaitTime) ? 0 : averageWaitTime).toFixed(2));
     const safeAvgTravel = Number((isNaN(averageTravelTime) ? 0 : averageTravelTime).toFixed(2));
-    const safeThroughput = Number((completedCount / elapsedHours).toFixed(1));
+    const safeThroughput = Number((completedCount / effectiveElapsedHours).toFixed(1));
 
     return {
       simulationTime: safeSimTime,

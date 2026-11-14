@@ -279,3 +279,63 @@ test('Signals: Default 4-way intersection cycles phases over time and vehicles s
   assert.strictEqual(metrics.activeVehiclesCount > 0, true);
   assert.strictEqual(metrics.totalSpawned, metrics.activeVehiclesCount + metrics.completedVehiclesCount);
 });
+
+test('Signals: Adaptive vs Fixed controller on default map across demand ratios (1:1, 3:1, 1:3)', () => {
+  const ratios = [
+    { label: '1:1', rateW: 600, rateS: 600 },
+    { label: '3:1', rateW: 900, rateS: 300 },
+    { label: '1:3', rateW: 300, rateS: 900 },
+  ];
+
+  for (const { rateW, rateS } of ratios) {
+    const defaultNodes = [
+      { id: 'node_center', x: 200, y: 200, controlType: 'fixed_signal', incomingEdgeIds: ['road_W_C', 'road_S_C'], outgoingEdgeIds: ['road_C_E', 'road_C_N'] },
+      { id: 'node_west', x: 50, y: 200, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] },
+      { id: 'node_south', x: 200, y: 350, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] },
+      { id: 'node_east', x: 350, y: 200, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] },
+      { id: 'node_north', x: 200, y: 50, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] },
+    ];
+    const defaultEdges = [
+      { id: 'road_W_C', fromNodeId: 'node_west', toNodeId: 'node_center', length: 150, speedLimit: 13.89, lanes: 2, isOneWay: true },
+      { id: 'road_S_C', fromNodeId: 'node_south', toNodeId: 'node_center', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+      { id: 'road_C_E', fromNodeId: 'node_center', toNodeId: 'node_east', length: 150, speedLimit: 13.89, lanes: 2, isOneWay: true },
+      { id: 'road_C_N', fromNodeId: 'node_center', toNodeId: 'node_north', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true },
+    ];
+
+    const odPairs = [
+      { originNodeId: 'node_west', destinationNodeId: 'node_east', arrivalRatePerHour: rateW },
+      { originNodeId: 'node_south', destinationNodeId: 'node_north', arrivalRatePerHour: rateS },
+    ];
+
+    // Fixed-time simulation
+    const gFixed = RoadGraph.fromJSON({ nodes: defaultNodes, edges: defaultEdges });
+    const simFixed = new NetworkSimulation({
+      graph: gFixed,
+      config: { seed: 42, timeStep: 0.1 },
+      odPairs,
+    });
+    simFixed.step(3000); // 300 seconds
+    const metricsFixed = simFixed.getMetrics();
+
+    // Adaptive simulation with identical seed
+    const adaptiveNodes = defaultNodes.map(n => n.id === 'node_center' ? { ...n, controlType: 'adaptive_signal' as const } : n);
+    const gAdaptive = RoadGraph.fromJSON({ nodes: adaptiveNodes, edges: defaultEdges });
+    const simAdaptive = new NetworkSimulation({
+      graph: gAdaptive,
+      config: { seed: 42, timeStep: 0.1 },
+      odPairs,
+    });
+    simAdaptive.step(3000); // 300 seconds
+    const metricsAdaptive = simAdaptive.getMetrics();
+
+    // Both simulations spawn and complete vehicles
+    assert.strictEqual(metricsFixed.totalSpawned > 0, true);
+    assert.strictEqual(metricsAdaptive.totalSpawned > 0, true);
+    assert.strictEqual(metricsFixed.completedVehiclesCount > 0, true);
+    assert.strictEqual(metricsAdaptive.completedVehiclesCount > 0, true);
+
+    // Adaptive controller should achieve lower wait time than fixed
+    assert.strictEqual(metricsAdaptive.averageWaitTime <= metricsFixed.averageWaitTime, true);
+  }
+});
+

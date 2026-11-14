@@ -6,6 +6,8 @@ import { Inspector } from './components/Inspector.tsx';
 import { SimulationControls } from './components/SimulationControls.tsx';
 import { MetricsOverlay } from './components/MetricsOverlay.tsx';
 import { MapManagerModal } from './components/MapManagerModal.tsx';
+import { ScenarioEditorModal } from './components/ScenarioEditorModal.tsx';
+import { ComparisonDashboard } from './components/ComparisonDashboard.tsx';
 import { useSocketSimulation } from './hooks/useSocketSimulation.ts';
 import { fetchMaps } from './api/client.ts';
 import type { 
@@ -53,11 +55,13 @@ const DEFAULT_INITIAL_MAP: MapData = {
 
 export const App: React.FC = () => {
   // App UI State
-  const [activeMode, setActiveMode] = useState<'editor' | 'simulation'>('editor');
+  const [activeMode, setActiveMode] = useState<'editor' | 'simulation' | 'comparison'>('editor');
   const [currentTool, setCurrentTool] = useState<EditorTool>('select');
   const [gridSnap, setGridSnap] = useState(true);
   const [roadMode, setRoadMode] = useState<'two-way' | 'one-way'>('two-way');
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+  const [isScenarioModalOpen, setIsScenarioModalOpen] = useState(false);
+  const [stagedScenario, setStagedScenario] = useState<any>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // Map Data State
@@ -275,88 +279,97 @@ export const App: React.FC = () => {
         onResumeSimulation={sim.resumeSimulation}
         onStopSimulation={sim.stopSimulation}
         onOpenMapManager={() => setIsMapModalOpen(true)}
+        onOpenScenarioModal={() => setIsScenarioModalOpen(true)}
         isConnected={sim.isConnected}
         hasUnsavedChanges={hasUnsavedChanges}
       />
 
-      {/* Main Interactive Canvas Area */}
-      <div className="relative flex-1 w-full h-full flex overflow-hidden">
-        {/* Editor Toolbar (Visible in Editor Mode) */}
-        {activeMode === 'editor' && (
-          <Toolbar
-            currentTool={currentTool}
-            setCurrentTool={setCurrentTool}
-            gridSnap={gridSnap}
-            setGridSnap={setGridSnap}
-            onResetView={handleResetView}
-            onClearMap={handleClearMap}
-            roadMode={roadMode}
-            setRoadMode={setRoadMode}
-            nodeCount={nodes.length}
-            edgeCount={edges.length}
-          />
-        )}
-
-        {/* 2D HTML5 Canvas Viewport */}
-        <CanvasViewport
-          activeMode={activeMode}
-          currentTool={currentTool}
-          gridSnap={gridSnap}
-          roadMode={roadMode}
-          nodes={nodes}
-          edges={edges}
-          selection={selection}
-          onSelect={setSelection}
-          onAddNode={handleAddNode}
-          onAddEdge={handleAddEdge}
-          onMoveNode={handleMoveNode}
-          onDeleteNode={handleDeleteNode}
-          onDeleteEdge={handleDeleteEdge}
-          simulationFrame={sim.currentFrame}
-          viewport={viewport}
-          setViewport={setViewport}
+      {/* Main Content Area */}
+      {activeMode === 'comparison' ? (
+        <ComparisonDashboard
+          baseMap={{ id: mapId || undefined, name: mapName, nodes, edges }}
+          onOpenScenarioModal={() => setIsScenarioModalOpen(true)}
+          stagedScenario={stagedScenario}
         />
+      ) : (
+        <div className="relative flex-1 w-full h-full flex overflow-hidden">
+          {/* Editor Toolbar (Visible in Editor Mode) */}
+          {activeMode === 'editor' && (
+            <Toolbar
+              currentTool={currentTool}
+              setCurrentTool={setCurrentTool}
+              gridSnap={gridSnap}
+              setGridSnap={setGridSnap}
+              onResetView={handleResetView}
+              onClearMap={handleClearMap}
+              roadMode={roadMode}
+              setRoadMode={setRoadMode}
+              nodeCount={nodes.length}
+              edgeCount={edges.length}
+            />
+          )}
 
-        {/* Inspector Sidebar (when element selected in Editor mode) */}
-        {activeMode === 'editor' && (
-          <Inspector
-            selection={selection}
+          {/* 2D HTML5 Canvas Viewport */}
+          <CanvasViewport
+            activeMode={activeMode}
+            currentTool={currentTool}
+            gridSnap={gridSnap}
+            roadMode={roadMode}
             nodes={nodes}
             edges={edges}
-            onUpdateNode={handleUpdateNode}
-            onUpdateEdge={handleUpdateEdge}
+            selection={selection}
+            onSelect={setSelection}
+            onAddNode={handleAddNode}
+            onAddEdge={handleAddEdge}
+            onMoveNode={handleMoveNode}
             onDeleteNode={handleDeleteNode}
             onDeleteEdge={handleDeleteEdge}
-            onClose={() => setSelection(null)}
+            simulationFrame={sim.currentFrame}
+            viewport={viewport}
+            setViewport={setViewport}
           />
-        )}
 
-        {/* Metrics Telemetry HUD (Visible in Simulation Mode) */}
-        {activeMode === 'simulation' && (
-          <MetricsOverlay
-            metrics={sim.metrics}
-            isRunning={sim.isRunning}
-          />
-        )}
+          {/* Inspector Sidebar (when element selected in Editor mode) */}
+          {activeMode === 'editor' && (
+            <Inspector
+              selection={selection}
+              nodes={nodes}
+              edges={edges}
+              onUpdateNode={handleUpdateNode}
+              onUpdateEdge={handleUpdateEdge}
+              onDeleteNode={handleDeleteNode}
+              onDeleteEdge={handleDeleteEdge}
+              onClose={() => setSelection(null)}
+            />
+          )}
 
-        {/* Bottom Playback Controls HUD (Visible in Simulation Mode) */}
-        {activeMode === 'simulation' && (
-          <SimulationControls
-            isRunning={sim.isRunning}
-            isPaused={sim.isPaused}
-            currentTime={sim.currentFrame?.time ?? 0}
-            speed={sim.speed}
-            seed={seed}
-            onStart={handleStartSim}
-            onPause={sim.pauseSimulation}
-            onResume={sim.resumeSimulation}
-            onStep={sim.stepSimulation}
-            onStop={sim.stopSimulation}
-            onSetSpeed={sim.setSpeedMultiplier}
-            onSetSeed={setSeed}
-          />
-        )}
-      </div>
+          {/* Metrics Telemetry HUD (Visible in Simulation Mode) */}
+          {activeMode === 'simulation' && (
+            <MetricsOverlay
+              metrics={sim.metrics}
+              isRunning={sim.isRunning}
+            />
+          )}
+
+          {/* Bottom Playback Controls HUD (Visible in Simulation Mode) */}
+          {activeMode === 'simulation' && (
+            <SimulationControls
+              isRunning={sim.isRunning}
+              isPaused={sim.isPaused}
+              currentTime={sim.currentFrame?.time ?? 0}
+              speed={sim.speed}
+              seed={seed}
+              onStart={handleStartSim}
+              onPause={sim.pauseSimulation}
+              onResume={sim.resumeSimulation}
+              onStep={sim.stepSimulation}
+              onStop={sim.stopSimulation}
+              onSetSpeed={sim.setSpeedMultiplier}
+              onSetSeed={setSeed}
+            />
+          )}
+        </div>
+      )}
 
       {/* Map Manager / Template Modal */}
       <MapManagerModal
@@ -366,6 +379,17 @@ export const App: React.FC = () => {
         currentEdges={edges}
         currentMapName={mapName}
         onLoadMap={loadMap}
+      />
+
+      {/* Scenario Editor / Studio Modal */}
+      <ScenarioEditorModal
+        isOpen={isScenarioModalOpen}
+        onClose={() => setIsScenarioModalOpen(false)}
+        baseMap={{ id: mapId || undefined, name: mapName, nodes, edges }}
+        onRunComparison={(scenario) => {
+          setStagedScenario(scenario);
+          setActiveMode('comparison');
+        }}
       />
     </div>
   );

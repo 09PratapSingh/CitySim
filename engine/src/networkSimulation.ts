@@ -223,18 +223,27 @@ export class NetworkSimulation {
    * Updates all intersection signal controllers with real-time queue feedback.
    */
   private updateSignals(dt: number): void {
-    // Gather current queue lengths per approach for adaptive controllers
+    // Gather current queue lengths and approaching vehicle counts per approach for adaptive controllers
     const incomingQueues = new Map<string, number>();
+    const incomingApproaching = new Map<string, number>();
+
     for (const edge of this.graph.getAllEdges()) {
+      // Stopped / queuing vehicles (velocity < 1.0 m/s)
       const q = this.activeVehicles.filter(
-        (v) => v.currentEdgeId === edge.id && v.velocity < 0.5
+        (v) => v.currentEdgeId === edge.id && v.velocity < 1.0
       ).length;
       incomingQueues.set(edge.id, q);
+
+      // Approaching vehicles within advance detection zone (80m from stop line)
+      const approaching = this.activeVehicles.filter(
+        (v) => v.currentEdgeId === edge.id && (edge.length - v.position) < 80
+      ).length;
+      incomingApproaching.set(edge.id, approaching);
     }
 
     // Step each signal controller forward
     for (const controller of this.signalControllers.values()) {
-      controller.update(dt, incomingQueues);
+      controller.update(dt, incomingQueues, incomingApproaching);
     }
   }
 
@@ -558,18 +567,20 @@ export class NetworkSimulation {
 
   /**
    * Compiles comprehensive network-wide performance metrics and KPIs.
+   * Accepts an optional warmupSeconds parameter to omit initialization transients.
    */
-  public getMetrics(): ComprehensiveMetrics {
+  public getMetrics(warmupSeconds: number = 0): ComprehensiveMetrics {
     return this.metricsCollector.compileMetrics(
       this.currentTime,
       this.vehicleCounter,
       this.activeVehicles,
-      this.completedVehicles
+      this.completedVehicles,
+      warmupSeconds
     );
   }
 
-  public getComprehensiveMetrics(): ComprehensiveMetrics {
-    return this.getMetrics();
+  public getComprehensiveMetrics(warmupSeconds: number = 0): ComprehensiveMetrics {
+    return this.getMetrics(warmupSeconds);
   }
 
   public getTimeSeries(): TimeSeriesSnapshot[] {

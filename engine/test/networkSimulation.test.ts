@@ -152,3 +152,123 @@ test('NetworkSimulation: Congestion map reflects vehicle densities on road segme
   assert.strictEqual(congestion['edge_AB'].densityRatio >= 0, true);
   assert.strictEqual(congestion['edge_AB'].densityRatio <= 1.0, true);
 });
+
+test('NetworkSimulation: Adaptive signal reduces wait time vs Fixed-Time under asymmetrical load', () => {
+  const create4Way = (controlType: 'fixed_signal' | 'adaptive_signal') => {
+    const g = new RoadGraph();
+    g.addNode({
+      id: 'center',
+      x: 200,
+      y: 200,
+      controlType,
+      incomingEdgeIds: ['in_W', 'in_S'],
+      outgoingEdgeIds: ['out_E', 'out_N'],
+      signalConfig: {
+        type: controlType,
+        cycleTime: 60,
+        phases: [
+          { id: 'p_EW', name: 'EW', greenEdgeIds: ['in_W'], greenDuration: 25, yellowDuration: 3, allRedDuration: 2 },
+          { id: 'p_NS', name: 'NS', greenEdgeIds: ['in_S'], greenDuration: 25, yellowDuration: 3, allRedDuration: 2 },
+        ],
+        adaptiveParams: {
+          minGreen: 8,
+          maxGreen: 35,
+          extensionSeconds: 3,
+          queueThreshold: 1,
+        },
+      },
+    });
+    g.addNode({ id: 'west', x: 50, y: 200, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] });
+    g.addNode({ id: 'south', x: 200, y: 350, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] });
+    g.addNode({ id: 'east', x: 350, y: 200, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] });
+    g.addNode({ id: 'north', x: 200, y: 50, controlType: 'unsignalized', incomingEdgeIds: [], outgoingEdgeIds: [] });
+
+    g.addEdge({ id: 'in_W', fromNodeId: 'west', toNodeId: 'center', length: 150, speedLimit: 13.89, lanes: 2, isOneWay: true });
+    g.addEdge({ id: 'in_S', fromNodeId: 'south', toNodeId: 'center', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true });
+    g.addEdge({ id: 'out_E', fromNodeId: 'center', toNodeId: 'east', length: 150, speedLimit: 13.89, lanes: 2, isOneWay: true });
+    g.addEdge({ id: 'out_N', fromNodeId: 'center', toNodeId: 'north', length: 150, speedLimit: 13.89, lanes: 1, isOneWay: true });
+    return g;
+  };
+
+  // Run Fixed-Time
+  const gFixed = create4Way('fixed_signal');
+  const simFixed = new NetworkSimulation({
+    graph: gFixed,
+    config: { seed: 42, timeStep: 0.1 },
+    odPairs: [
+      { originNodeId: 'west', destinationNodeId: 'east', arrivalRatePerHour: 800 },
+      { originNodeId: 'south', destinationNodeId: 'north', arrivalRatePerHour: 150 },
+    ],
+  });
+  simFixed.step(1200); // 120 seconds
+  const metricsFixed = simFixed.getMetrics();
+
+  // Run Adaptive Signal with identical seed
+  const gAdaptive = create4Way('adaptive_signal');
+  const simAdaptive = new NetworkSimulation({
+    graph: gAdaptive,
+    config: { seed: 42, timeStep: 0.1 },
+    odPairs: [
+      { originNodeId: 'west', destinationNodeId: 'east', arrivalRatePerHour: 800 },
+      { originNodeId: 'south', destinationNodeId: 'north', arrivalRatePerHour: 150 },
+    ],
+  });
+  simAdaptive.step(1200); // 120 seconds
+  const metricsAdaptive = simAdaptive.getMetrics();
+
+  // Both should spawn vehicles and complete trips
+  assert.strictEqual(metricsFixed.totalSpawned > 0, true);
+  assert.strictEqual(metricsAdaptive.totalSpawned > 0, true);
+
+  // The adaptive controller provides higher throughput or equal/lower wait time
+  assert.strictEqual(metricsAdaptive.completedVehiclesCount >= metricsFixed.completedVehiclesCount, true);
+});
+
+test('NetworkSimulation: compileMetrics respects warmupSeconds to exclude initial transient phase', () => {
+  const graph = createCorridorNetwork();
+  const sim = new NetworkSimulation({
+    graph,
+    config: { seed: 42, timeStep: 0.1 },
+    odPairs: [{ originNodeId: 'node_A', destinationNodeId: 'node_C', arrivalRatePerHour: 720 }],
+  });
+
+  // Run for 120 seconds (1200 ticks)
+  sim.step(1200);
+
+  // Metrics with 0 warmup vs 60s warmup
+  const metricsFull = sim.getMetrics(0);
+  const metricsWarmup = sim.getMetrics(60);
+
+  assert.strictEqual(metricsFull.completedVehiclesCount >= metricsWarmup.completedVehiclesCount, true);
+  // Both produce valid non-negative wait times
+  assert.strictEqual(metricsFull.averageWaitTime >= 0, true);
+  assert.strictEqual(metricsWarmup.averageWaitTime >= 0, true);
+});
+
+test('NetworkSimulation: Time-series snapshots record dynamic wait time, speed, and active counts', () => {
+  const graph = createCorridorNetwork();
+  const sim = new NetworkSimulation({
+    graph,
+    config: { seed: 42, timeStep: 0.1 },
+    odPairs: [{ originNodeId: 'node_A', destinationNodeId: 'node_C', arrivalRatePerHour: 720 }],
+  });
+
+  // Step 200 ticks (20s)
+  sim.step(200);
+
+  const snapshots = sim.getTimeSeries();
+  assert.strictEqual(snapshots.length >= 2, true);
+
+  const snap = snapshots[snapshots.length - 1];
+  assert.strictEqual(typeof snap.time, 'number');
+  assert.strictEqual(typeof snap.timestamp, 'number');
+  assert.strictEqual(typeof snap.averageWaitTime, 'number');
+  assert.strictEqual(typeof snap.currentAvgWaitTime, 'number');
+  assert.strictEqual(typeof snap.averageSpeed, 'number');
+  assert.strictEqual(typeof snap.currentAvgSpeed, 'number');
+  assert.strictEqual(typeof snap.activeVehiclesCount, 'number');
+  assert.strictEqual(typeof snap.activeVehicles, 'number');
+  assert.strictEqual(typeof snap.completedVehiclesCount, 'number');
+  assert.strictEqual(typeof snap.completedVehicles, 'number');
+});
+

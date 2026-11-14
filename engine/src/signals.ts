@@ -48,9 +48,14 @@ export abstract class TrafficSignalController {
   /**
    * Advances controller clock and evaluates state transitions.
    * @param dt Time elapsed in seconds
-   * @param incomingQueues Map of edgeId -> number of queued vehicles (for adaptive logic)
+   * @param incomingQueues Map of edgeId -> number of queued vehicles
+   * @param incomingApproaching Map of edgeId -> number of vehicles approaching stop bar
    */
-  public abstract update(dt: number, incomingQueues?: Map<string, number>): void;
+  public abstract update(
+    dt: number,
+    incomingQueues?: Map<string, number>,
+    incomingApproaching?: Map<string, number>
+  ): void;
 
   /**
    * Returns the current signal aspect for a specific incoming road edge.
@@ -175,7 +180,11 @@ export class AdaptiveSignalController extends TrafficSignalController {
     this.currentGreenAllocated = this.params.minGreen;
   }
 
-  public update(dt: number, incomingQueues?: Map<string, number>): void {
+  public update(
+    dt: number,
+    incomingQueues?: Map<string, number>,
+    incomingApproaching?: Map<string, number>
+  ): void {
     this.timeInState += dt;
     const currentPhase = this.phases[this.currentPhaseIndex];
     const yellowDuration = currentPhase.yellowDuration ?? 3.0;
@@ -188,23 +197,57 @@ export class AdaptiveSignalController extends TrafficSignalController {
           return;
         }
 
-        // Count queues on active approach vs competing approaches
-        const activeQueue = this.countQueueForEdges(currentPhase.greenEdgeIds, incomingQueues);
-        const competingQueue = this.countCompetingQueue(currentPhase.greenEdgeIds, incomingQueues);
+        // Active approaches: count vehicles queued or approaching within detection zone
+        let activeStopped = 0;
+        let activeApproaching = 0;
+        for (const id of currentPhase.greenEdgeIds) {
+          activeStopped += incomingQueues?.get(id) ?? 0;
+          activeApproaching += incomingApproaching?.get(id) ?? 0;
+        }
 
-        // Extension evaluation
+        // Competing approaches: count waiting/approaching vehicles on opposing phases
+        let competingWaiting = 0;
+        if (incomingQueues) {
+          for (const [edgeId, q] of incomingQueues.entries()) {
+            if (!currentPhase.greenEdgeIds.includes(edgeId)) {
+              competingWaiting += q;
+            }
+          }
+        }
+        if (incomingApproaching) {
+          for (const [edgeId, app] of incomingApproaching.entries()) {
+            if (!currentPhase.greenEdgeIds.includes(edgeId)) {
+              competingWaiting += app;
+            }
+          }
+        }
+
+        const hasActiveDemand = (activeApproaching > 0 || activeStopped >= this.params.queueThreshold);
+        const hasCompetingDemand = competingWaiting > 0;
+
+        // Dwell in green if no competing traffic is waiting (avoids wasteful clearance cycling)
+        if (!hasCompetingDemand) {
+          return;
+        }
+
+        // Hard ceiling: maxGreen reached while conflicting demand is waiting
+        if (this.timeInState >= this.params.maxGreen) {
+          this.internalState = 'YELLOW';
+          this.timeInState = 0;
+          return;
+        }
+
+        // Actuated extension: extend green while active demand is actively discharging/approaching
         const canExtend = this.timeInState + this.params.extensionSeconds <= this.params.maxGreen;
-        const hasActiveDemand = activeQueue >= this.params.queueThreshold;
-        const competingStarvation = competingQueue > activeQueue * 2 && this.timeInState >= this.params.minGreen * 1.5;
+        const competingStarvation = competingWaiting >= 6 && this.timeInState >= this.params.minGreen * 2.0;
 
         if (hasActiveDemand && canExtend && !competingStarvation) {
-          // Extend green: remain in GREEN state
           this.currentGreenAllocated = Math.min(
             this.params.maxGreen,
             this.timeInState + this.params.extensionSeconds
           );
-        } else if (this.timeInState >= this.currentGreenAllocated || this.timeInState >= this.params.maxGreen || !hasActiveDemand) {
-          // Terminate green: advance to YELLOW
+        } else if (!hasActiveDemand || this.timeInState >= this.currentGreenAllocated) {
+          // Gap-out: active approach cleared or passage gap exceeded
           this.internalState = 'YELLOW';
           this.timeInState = 0;
         }

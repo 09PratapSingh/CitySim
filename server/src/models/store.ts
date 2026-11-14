@@ -61,6 +61,69 @@ function seedDefaultMap(): void {
 }
 seedDefaultMap();
 
+// Seed initial default scenarios into in-memory store
+function seedDefaultScenarios(): void {
+  const defaultScenarioId = 'scen_default_closure';
+  if (!memScenarios.has(defaultScenarioId)) {
+    memScenarios.set(defaultScenarioId, {
+      id: defaultScenarioId,
+      baseMapId: 'map_default_4way',
+      name: 'West Approach Road Closure',
+      description: 'Simulates emergency closure of the primary westbound approach (road_W_C).',
+      seed: 42,
+      demandMultiplier: 1.0,
+      modifications: {
+        closedEdgeIds: ['road_W_C'],
+        signalOverrides: [],
+        speedLimitOverrides: [],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
+
+  const adaptiveScenarioId = 'scen_default_adaptive';
+  if (!memScenarios.has(adaptiveScenarioId)) {
+    memScenarios.set(adaptiveScenarioId, {
+      id: adaptiveScenarioId,
+      baseMapId: 'map_default_4way',
+      name: 'Smart Adaptive Signal Upgrade',
+      description: 'Upgrades center intersection to dynamic queue-responsive signal timing.',
+      seed: 42,
+      demandMultiplier: 1.0,
+      modifications: {
+        closedEdgeIds: [],
+        signalOverrides: [
+          { nodeId: 'node_center', controlType: 'adaptive_signal' }
+        ],
+        speedLimitOverrides: [],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
+
+  const rushScenarioId = 'scen_default_rushhour';
+  if (!memScenarios.has(rushScenarioId)) {
+    memScenarios.set(rushScenarioId, {
+      id: rushScenarioId,
+      baseMapId: 'map_default_4way',
+      name: 'Peak Hour Traffic Surge (1.8x)',
+      description: 'Simulates heavy rush hour congestion with 1.8x traffic demand across all approaches.',
+      seed: 42,
+      demandMultiplier: 1.8,
+      modifications: {
+        closedEdgeIds: [],
+        signalOverrides: [],
+        speedLimitOverrides: [],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
+}
+seedDefaultScenarios();
+
 export class DataStore {
   // --- MAPS ---
   public static async getMaps(): Promise<MapData[]> {

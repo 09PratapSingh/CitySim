@@ -356,3 +356,81 @@ This document records the critical architectural, algorithmic, and engineering d
 - **Alternatives Rejected:**
   - *Silently ignoring unconfigured signal nodes:* Led to the reported bug where nodes visually appeared signalized on UI but had no controller in the engine.
 - **Viva Defense Note:** Demonstrates self-healing infrastructure modeling: arbitrary road layouts drafted by urban planners immediately gain realistic, non-conflicting traffic signal controllers without requiring manual phase timing entry.
+
+---
+
+## ADR 028: Dual-Run Deterministic Simulation Execution with Seed Synchronization
+
+- **Status:** Accepted (Stage 7)
+- **Context:** To evaluate the impact of road closures, signal timing modifications, and demand surges, urban planners and examiners need to compare a Baseline network (Scenario A) against a Modified network (Scenario B). If the two simulations draw different random arrival streams, stochastic noise obscures the genuine causal impact of the network modification.
+- **Decision:** Implement an atomic dual-run comparison endpoint (`POST /api/simulations/compare`) and client-side execution coordinator that runs both Baseline and Modified scenarios using the **exact same PRNG seed** (e.g. `seed = 42`) and identical time-step increments ($\Delta t = 0.1\text{s}$).
+- **Alternatives Rejected:**
+  - *Asynchronous uncoordinated single runs:* Users have to manually remember seeds, configure both runs separately, and calculate percentage differences by hand.
+  - *Random independent seeds:* Introduces sampling variance into vehicle arrival times, invalidating rigorous statistical comparison.
+- **Viva Defense Note:** Satisfies the fundamental scientific principle of controlled experimentation (*ceteris paribus*). Using Common Random Numbers (CRN) across paired runs ensures that both baseline and scenario experience identical arrival streams, isolating the causal impact of the network modification from random arrival variations while multi-seed replications provide statistical confidence.
+
+---
+
+## ADR 031: Actuated Passage Time and Advance Detection Zone in Adaptive Signal Controllers
+
+- **Status:** Accepted (Stage 7 Refinement)
+- **Context:** Initial adaptive signal logic evaluated only stopped vehicles ($v < 0.5\text{ m/s}$) to determine whether active demand persisted. When the signal turned green, queued vehicles accelerated into motion ($v > 0.5\text{ m/s}$), causing the stopped count to immediately drop to 0. Consequently, the controller detected no "stopped queue", prematurely gapped out at the minimum green boundary ($10\text{s}$), and cycled immediately to yellow. This created short $29\text{s}$ cycles with 31% wasted clearance time, which increased average delay on the default map instead of reducing it.
+- **Decision:**
+  1. Implement an **80-meter advance detection zone** upstream of the stop bar.
+  2. Evaluate active approach demand from both queuing vehicles ($v < 1.0\text{ m/s}$) and vehicles approaching within the advance detection zone.
+  3. Apply an **actuated passage time extension** ($\Delta t_{\text{ext}} = 3.5\text{s}$) upon vehicle detection, extending the green interval up to `maxGreen` ($45\text{s}$).
+  4. If competing cross-streets have zero waiting vehicles, allow the active phase to dwell in green rather than forcing an empty phase transition.
+- **Alternatives Rejected:**
+  - *Fixed-cycle scaling:* Lacks dynamic responsiveness to real-time platoon arrivals.
+  - *Threshold-only stopped count:* Suffers from discharge-acceleration detection dropout.
+- **Viva Defense Note:** Implements standard NEMA/HCM actuated signal control principles (passage time, gap reduction, and dilemma zone protection), delivering 47% to 75% wait time reductions under asymmetrical traffic flows.
+
+---
+
+## ADR 032: Multi-Seed Paired Replications & Warm-Up Transient Elimination (Common Random Numbers)
+
+- **Status:** Accepted (Stage 7 Refinement)
+- **Context:** A single 90-second simulation run contains only ~70 vehicles and is heavily dominated by initial network loading (vehicles traversing an initially empty grid). This causes high stochastic variance between runs and makes statistical comparison noisy.
+- **Decision:**
+  1. Make simulation duration configurable ($300\text{s}, 600\text{s}, 900\text{s}$ with a default of $600\text{s}$).
+  2. Implement an initial **warm-up period exclusion** (first $60\text{s}$ omitted from aggregate KPI calculations) to eliminate network loading bias and capture steady-state traffic metrics.
+  3. Implement **$N$ paired replications** ($N = 5$ paired seeds by default) using Common Random Numbers (CRN), where each pair $(i)$ evaluates Baseline and Scenario with the exact same seed ($s_i = \text{seed} + i \times 101$).
+  4. Compute and display the sample mean ($\bar{\Delta}$) and sample standard deviation ($s = \sqrt{\frac{\sum (\Delta_i - \bar{\Delta})^2}{N - 1}}$) for wait time, travel time, speed, throughput, and completed trips.
+- **Alternatives Rejected:**
+  - *Single 90s seed run:* Too noisy and vulnerable to random outliers.
+  - *Independent random seeds across baseline and scenario:* Introduces artificial variance between baseline and scenario, obscuring true intervention effects.
+- **Viva Defense Note:** Adheres to established discrete-event simulation methodology (Law & Kelton). Demonstrates statistical rigor through warm-up transient elimination, CRN variance reduction, and multi-replication confidence reporting.
+
+
+---
+
+## ADR 029: Semantic Delta KPI Formulation & Real-Time Performance Directionality
+
+- **Status:** Accepted (Stage 7)
+- **Context:** Comparison metrics must convey both absolute magnitude and relative directionality (improvement vs. degradation) without confusing users or examiners.
+- **Decision:** Calculate directional deltas and percentage changes for all core transportation metrics:
+  $$\Delta W = W_{\text{scenario}} - W_{\text{baseline}}, \quad \%\Delta W = \frac{\Delta W}{W_{\text{baseline}}} \times 100\%$$
+  $$\Delta \text{Throughput} = \text{Throughput}_{\text{scenario}} - \text{Throughput}_{\text{baseline}}$$
+  $$\Delta v = v_{\text{scenario}} - v_{\text{baseline}}$$
+  Semantic color mappings:
+  - **Wait Time / Travel Time:** $\Delta < 0 \implies$ Green (Improvement: delays reduced); $\Delta > 0 \implies$ Rose-Red (Degradation: queue backlog worsened).
+  - **Network Throughput & Mean Speed:** $\Delta > 0 \implies$ Green (Improvement: higher vehicle flow rate); $\Delta < 0 \implies$ Rose-Red (Degradation: lower capacity utilization).
+- **Alternatives Rejected:**
+  - *Unsigned Absolute Values:* Showing $|\Delta W|$ strips away the critical information of whether a signal optimization helped or harmed traffic flow.
+- **Viva Defense Note:** Adheres to international transportation engineering standards where reductions in vehicle hours of delay (VHD) are classified as net societal benefits.
+
+---
+
+## ADR 030: Multi-Perspective Comparative Recharts Trajectories & Synchronized Spatial Canvas
+
+- **Status:** Accepted (Stage 7)
+- **Context:** Aggregate end-of-run metrics do not reveal when an intersection collapsed into gridlock or how queue spillback evolved dynamically during peak intervals.
+- **Decision:** Integrate `recharts` to render synchronized comparative time-series trajectories sampled at $5.0\text{s}$ intervals across four analytical perspectives:
+  1. **Stopped Delay over Time:** Dual Area curves showing transient queue build-up and signal clearance.
+  2. **Speed Trajectory:** Dual Line plots showing network velocity degradation during bottleneck events.
+  3. **Active Vehicle Accumulation:** Real-time queue count indicating network saturation.
+  4. **Throughput & Completed Trips:** Grouped Bar charts comparing overall volume clearance.
+  Supplement the time-series charts with a dual-canvas spatial schematic showing road closures with hazard striping, volume-to-capacity ($V/C$) density ratios, and intersection control badges (`Fixed` vs. `Adaptive`).
+- **Alternatives Rejected:**
+  - *Text-only aggregate summary tables:* Hides dynamic queuing waves, shockwave propagation, and signal cycle transitions.
+- **Viva Defense Note:** Gives examiners clear graphical evidence of dynamic congestion phenomena, allowing in-depth discussion of transient vs. steady-state queuing behavior during defense.

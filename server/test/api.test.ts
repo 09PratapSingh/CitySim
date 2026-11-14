@@ -122,3 +122,61 @@ test('API: Headless simulation execution POST /api/simulations/run', async () =>
   assert.strictEqual(getRunRes.status, 200);
   assert.strictEqual(getRunRes.body.data.seed, 42);
 });
+
+test('API: Dual-Run Simulation Comparison POST /api/simulations/compare', async () => {
+  const mapsRes = await request(app).get('/api/maps');
+  const baseMapId = mapsRes.body.data[0].id || mapsRes.body.data[0]._id;
+
+  const comparePayload = {
+    baseMapId,
+    seed: 42,
+    durationSeconds: 30,
+    demandMultiplier: 1.2,
+    scenarioName: 'West Approach Closed vs Baseline',
+    modifications: {
+      closedEdgeIds: ['road_W_C'],
+      signalOverrides: [],
+      speedLimitOverrides: [],
+    },
+  };
+
+  const compareRes = await request(app).post('/api/simulations/compare').send(comparePayload);
+  assert.strictEqual(compareRes.status, 200);
+  assert.strictEqual(compareRes.body.success, true);
+
+  const { baseline, scenario, deltas, comparativeTimeSeries } = compareRes.body.data;
+
+  // Baseline and Scenario runs must both be completed
+  assert.strictEqual(baseline.status, 'completed');
+  assert.strictEqual(scenario.status, 'completed');
+  assert.strictEqual(baseline.seed, 42);
+  assert.strictEqual(scenario.seed, 42);
+
+  // Deltas must be calculated
+  assert.notStrictEqual(deltas, undefined);
+  assert.strictEqual(typeof deltas.deltaAvgWaitTime, 'number');
+  assert.strictEqual(typeof deltas.deltaAvgWaitTimeStdDev, 'number');
+  assert.strictEqual(typeof deltas.deltaThroughput, 'number');
+  assert.strictEqual(typeof deltas.deltaCompleted, 'number');
+  assert.strictEqual(typeof deltas.warmupSeconds, 'number');
+  assert.strictEqual(typeof deltas.replicationsCount, 'number');
+  assert.strictEqual(Array.isArray(deltas.seedsUsed), true);
+  assert.strictEqual(deltas.seedsUsed.length, deltas.replicationsCount);
+
+  // Multi-seed replications breakdown must be returned
+  const { replications } = compareRes.body.data;
+  assert.strictEqual(Array.isArray(replications), true);
+  assert.strictEqual(replications.length, deltas.replicationsCount);
+  assert.strictEqual(typeof replications[0].seed, 'number');
+  assert.strictEqual(typeof replications[0].deltaWait, 'number');
+
+  // Comparative time series must be populated
+  assert.strictEqual(Array.isArray(comparativeTimeSeries), true);
+  assert.strictEqual(comparativeTimeSeries.length >= 5, true);
+  assert.strictEqual(typeof comparativeTimeSeries[0].baselineWaitTime, 'number');
+  assert.strictEqual(typeof comparativeTimeSeries[0].scenarioWaitTime, 'number');
+  assert.strictEqual(typeof comparativeTimeSeries[0].baselineSpeed, 'number');
+  assert.strictEqual(typeof comparativeTimeSeries[0].scenarioSpeed, 'number');
+  assert.strictEqual(typeof comparativeTimeSeries[0].baselineActiveVehicles, 'number');
+  assert.strictEqual(typeof comparativeTimeSeries[0].scenarioActiveVehicles, 'number');
+});

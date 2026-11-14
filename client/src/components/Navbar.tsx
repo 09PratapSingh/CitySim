@@ -9,13 +9,15 @@ import {
   FolderOpen, 
   Activity,
   Layers,
-  Sparkles
+  Sparkles,
+  Split,
+  Sliders
 } from 'lucide-react';
 
 interface NavbarProps {
   mapName: string;
-  activeMode: 'editor' | 'simulation';
-  setActiveMode: (mode: 'editor' | 'simulation') => void;
+  activeMode: 'editor' | 'simulation' | 'comparison';
+  setActiveMode: (mode: 'editor' | 'simulation' | 'comparison') => void;
   isRunning: boolean;
   isPaused: boolean;
   onStartSimulation: () => void;
@@ -23,6 +25,7 @@ interface NavbarProps {
   onResumeSimulation: () => void;
   onStopSimulation: () => void;
   onOpenMapManager: () => void;
+  onOpenScenarioModal?: () => void;
   isConnected: boolean;
   hasUnsavedChanges: boolean;
 }
@@ -38,6 +41,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onResumeSimulation,
   onStopSimulation,
   onOpenMapManager,
+  onOpenScenarioModal,
   isConnected,
   hasUnsavedChanges,
 }) => {
@@ -96,6 +100,21 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
           )}
         </button>
+
+        <button
+          onClick={() => {
+            if (isRunning) onStopSimulation();
+            setActiveMode('comparison');
+          }}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition ${
+            activeMode === 'comparison'
+              ? 'bg-slate-800 text-indigo-400 shadow-sm'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Split className="w-3.5 h-3.5" />
+          <span>Scenario Comparison</span>
+        </button>
       </div>
 
       {/* Quick Actions & Status */}
@@ -138,6 +157,14 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
           </div>
+        ) : activeMode === 'comparison' ? (
+          <button
+            onClick={onOpenScenarioModal}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition"
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            <span>Scenario Studio</span>
+          </button>
         ) : (
           <button
             onClick={onOpenMapManager}

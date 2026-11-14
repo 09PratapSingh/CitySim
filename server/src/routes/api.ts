@@ -16,6 +16,7 @@ import {
 } from '../controllers/scenarioController.ts';
 import {
   runHeadlessSimulation,
+  compareSimulations,
   listRuns,
   getRun,
 } from '../controllers/simulationController.ts';
@@ -47,6 +48,7 @@ router.delete('/scenarios/:id', deleteScenario);
 
 // Simulation execution and history routes
 router.post('/simulations/run', runHeadlessSimulation);
+router.post('/simulations/compare', compareSimulations);
 router.get('/simulations/runs', listRuns);
 router.get('/simulations/runs/:id', getRun);
 

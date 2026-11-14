@@ -55,38 +55,38 @@ This checklist tracks the stage-wise progress of the **CitySim: Traffic Scenario
 ---
 
 ## Stage 5: Backend API, Socket.IO & Persistence
-- ⬜ 5.1 Initialize Node.js Express server with TypeScript / ES Modules.
-- ⬜ 5.2 Set up MongoDB connection via Mongoose with resilient fallback / memory fallback mode for offline testing.
-- ⬜ 5.3 Implement Mongoose Schemas:
+- ✅ 5.1 Initialize Node.js Express server with TypeScript / ES Modules.
+- ✅ 5.2 Set up MongoDB connection via Mongoose with resilient fallback / memory fallback mode for offline testing.
+- ✅ 5.3 Implement Mongoose Schemas:
   - `MapSchema`: name, description, nodes, edges, bounds, metadata.
   - `ScenarioSchema`: baseMapId, name, modifications (closed roads, signal overrides, demand scale), seed.
   - `RunSchema`: scenarioId, seed, config, aggregateMetrics, timeSeriesMetrics, status, timestamps.
-- ⬜ 5.4 Create REST endpoints:
+- ✅ 5.4 Create REST endpoints:
   - `CRUD /api/maps`
   - `CRUD /api/scenarios`
   - `POST /api/simulations/run` (execute headless simulation with fixed seed and return complete report)
   - `GET /api/simulations/runs/:id`
-- ⬜ 5.5 Set up Socket.IO server for streaming live simulation frames to connected frontends.
-- ⬜ 5.6 Implement input validation, boundary checking, and informative error handling.
-- ⬜ 5.7 Write automated API integration tests (Supertest / Vitest / Mocha).
+- ✅ 5.5 Set up Socket.IO server for streaming live simulation frames to connected frontends.
+- ✅ 5.6 Implement input validation, boundary checking, and informative error handling.
+- ✅ 5.7 Write automated API integration tests (Supertest / Vitest / Mocha).
 
 ---
 
 ## Stage 6: React Map Editor & Live Simulation Canvas
-- ⬜ 6.1 Initialize React frontend with Vite, Tailwind CSS / clean styling, and Lucide icons.
-- ⬜ 6.2 Implement HTML5 Canvas interactive 2D map viewport (pan, zoom, grid snapping).
-- ⬜ 6.3 Build interactive Map Editor tools:
+- ✅ 6.1 Initialize React frontend with Vite, Tailwind CSS / clean styling, and Lucide icons.
+- ✅ 6.2 Implement HTML5 Canvas interactive 2D map viewport (pan, zoom, grid snapping).
+- ✅ 6.3 Build interactive Map Editor tools:
   - Add / move / delete intersection nodes
   - Draw directional or bidirectional road edges between nodes
   - Inspector sidebar to configure road properties (lanes, speed limit, one-way/two-way)
   - Configure intersection control type (unsignalized, fixed signal, adaptive signal)
   - Save to and load from backend API
-- ⬜ 6.4 Implement simulation playback controls HUD (Play, Pause, Step Forward, Speed Multiplier: 0.5x, 1x, 2x, 5x, 10x, Reset).
-- ⬜ 6.5 Render live simulation on Canvas:
+- ✅ 6.4 Implement simulation playback controls HUD (Play, Pause, Step Forward, Speed Multiplier: 0.5x, 1x, 2x, 5x, 10x, Reset).
+- ✅ 6.5 Render live simulation on Canvas:
   - Animated vehicles smoothly interpolated between simulation ticks
   - Traffic signal lights (Red / Yellow / Green indicators at intersections)
   - Congestion heatmap overlay on road edges based on density
-- ⬜ 6.6 Stage 6 verification in browser.
+- ✅ 6.6 Stage 6 verification in browser.
 
 ---
 

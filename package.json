@@ -10,6 +10,14 @@
     "client"
   ],
   "scripts": {
+    "start": "npm --prefix server start",
+    "start:server": "npm --prefix server start",
+    "dev:server": "npm --prefix server dev",
+    "dev:client": "npm --prefix client run dev",
+    "build:client": "npm --prefix client run build",
+    "build": "npm --prefix client run build",
+    "test": "npm --prefix engine test",
+    "test:server": "npm --prefix server test",
     "test:engine": "npm --prefix engine test",
     "demo:stage1": "node --experimental-strip-types engine/demo.ts",
     "demo:stage2": "node --experimental-strip-types engine/demoStage2.ts",

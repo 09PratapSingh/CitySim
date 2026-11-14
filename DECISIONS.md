@@ -237,3 +237,93 @@ This document records the critical architectural, algorithmic, and engineering d
 - **Alternatives Rejected:**
   - *Buffering all ticks:* 3600 seconds $\times$ 10 ticks/s = 36,000 data points per run; crashes browser chart renderers.
 - **Viva Defense Note:** Optimal performance engineering; reduces chart data payloads by $98\%$ while preserving macro trends and peak indicators.
+
+---
+
+## ADR 019: Dual-Mode Persistence: MongoDB with Resilient In-Memory Fallback
+
+- **Status:** Accepted (Stage 5)
+- **Context:** In student project presentations and viva examinations, examiners frequently run the project on machines without an active MongoDB daemon or internet connectivity.
+- **Decision:** Implement a unified `DataStore` abstraction. When `connectDB()` connects to MongoDB, Mongoose schemas (`MapModel`, `ScenarioModel`, `RunModel`) are used. If MongoDB is unavailable or `MONGODB_URI` is omitted, the server automatically and transparently operates in an In-Memory Store mode with pre-seeded sample maps.
+- **Alternatives Rejected:**
+  - *Hard failure on missing MongoDB:* Causes immediate crash on `npm start` if MongoDB is down, ruining viva presentations.
+  - *Using SQLite / local file locks:* Adds native C++ binary dependencies (e.g. better-sqlite3) that cause build failures across different Node versions.
+- **Viva Defense Note:** Exemplifies enterprise resilience and defensive programming. Shows examiners that the system handles infrastructure outages gracefully without losing application functionality.
+
+---
+
+## ADR 020: Server-Side 2D Spatial Position Interpolation for WebSocket Streaming
+
+- **Status:** Accepted (Stage 5)
+- **Context:** The simulation engine computes 1D longitudinal positions along directed road segments (`position: meters`). The frontend HTML5 canvas requires 2D screen coordinates $(x, y)$ and heading angle $\theta$ to render vehicle shapes smoothly.
+- **Decision:** Perform spatial 2D interpolation and multi-lane lateral offsets on the server inside `simulationSocket.ts` before emitting `simulation_frame` payloads over Socket.IO.
+- **Alternatives Rejected:**
+  - *Sending raw 1D position and forcing client to compute geometric transforms:* Duplicates road geometry logic in client components and increases frontend bundle size.
+- **Viva Defense Note:** Reduces client-side computational overhead, allowing the React canvas to focus strictly on 60 FPS rendering.
+
+---
+
+## ADR 021: Headless Batch Execution vs. Live Socket Streaming
+
+- **Status:** Accepted (Stage 5)
+- **Context:** Users need two distinct simulation experiences: (1) watching live cars drive and queue on the interactive canvas, and (2) instantly generating statistical reports comparing 60 minutes of baseline vs. modified scenarios.
+- **Decision:** Support dual execution modalities:
+  1. **Live Interactive Stream (Socket.IO):** Steps tick-by-tick with adjustable speed multipliers ($1\times, 2\times, 5\times, 10\times$), streaming interpolated vehicle coordinates.
+  2. **Headless Batch Runner (`POST /api/simulations/run`):** Executes 3600 simulated seconds in < 200ms on the backend, persisting the full statistical run report into the database for instant side-by-side charting.
+- **Alternatives Rejected:**
+  - *Only live playback:* Users would have to sit and wait minutes for long simulations to finish before seeing comparative before/after metrics.
+- **Viva Defense Note:** Demonstrates architectural versatility, satisfying both visual demonstration needs and rigorous analytical evaluation.
+
+---
+
+## ADR 022: HTML5 2D Canvas vs. SVG / Leaflet for Microscopic Traffic Rendering
+
+- **Status:** Accepted (Stage 6)
+- **Context:** The interactive frontend must render dynamic road network geometry, signal indicators, vehicle bounding boxes, and density heatmaps smoothly at 60 FPS while supporting camera panning, zooming, and editing.
+- **Decision:** Implement an HTML5 2D Canvas rendering pipeline driven by a reactive `requestAnimationFrame` loop.
+- **Alternatives Rejected:**
+  - *SVG / DOM Elements:* Injecting a DOM or SVG element for every vehicle, road stripe, and signal aspect results in hundreds of DOM nodes. In high-density scenarios with 200+ vehicles, DOM layout thrashing and garbage collection spikes degrade framerate below 15 FPS.
+  - *Leaflet / Mapbox GIS:* Leaflet is engineered for geographic Mercator tile coordinates (lat/long). Our simulation operates in Euclidean metric space ($L$ in meters); forcing geographic transformations creates distortion, excessive dependency bloat, and prevents clean sub-pixel drawing of multi-lane asphalt ribbons.
+  - *WebGL / Three.js:* 3D graphics were explicitly ruled out of scope. WebGL 2D adds shader compilation overhead and significant complexity without tangible benefits over 2D Canvas for this scale.
+- **Viva Defense Note:** 2D Canvas gives complete control over immediate-mode rendering, sub-pixel antialiasing, custom asphalt lane markings, vehicle rotation matrices, and hazard overlays while maintaining a constant 60 FPS profile.
+
+---
+
+## ADR 023: Camera Viewport Transformation Matrix & Infinite Grid Snapping
+
+- **Status:** Accepted (Stage 6)
+- **Context:** The map editor and visualizer must allow urban planners to inspect both large-scale metropolitan networks and individual intersection stop lines.
+- **Decision:** Encapsulate viewport state in `{ x, y, zoom }` where $(x, y)$ represents world coordinates at the canvas center, and apply explicit affine transformation functions:
+  $$\text{screenX} = (wx - \text{viewport.x}) \cdot \text{zoom} + \frac{W}{2}$$
+  $$\text{worldX} = \frac{sx - W/2}{\text{zoom}} + \text{viewport.x}$$
+  Grid snapping snaps coordinates to the nearest modular 25-meter increment ($x_{\text{snapped}} = \text{round}(x / 25) \cdot 25$).
+- **Alternatives Rejected:**
+  - *CSS Transforms on Canvas Element:* Panning or scaling the canvas element itself blurs vector lines, distorts text labels, and invalidates mouse hit-testing.
+- **Viva Defense Note:** Maintains crisp vector clarity at all zoom levels ($0.2\times$ to $4.0\times$) and allows seamless mouse wheel zooming anchored directly at the cursor position.
+
+---
+
+## ADR 024: Ad-Hoc In-Memory Map Simulation vs. Forced Database Persistence
+
+- **Status:** Accepted (Stage 6)
+- **Context:** When a city planner draws a hypothetical road modification or test junction, forcing them to name, validate, and save the map to MongoDB before testing disrupts exploratory workflow.
+- **Decision:** Upgrade the WebSocket coordinator (`simulationSocket.ts`) and React client to accept both a stored database `baseMapId` or an ad-hoc in-memory geometry payload (`customMap: { nodes, edges }`).
+- **Alternatives Rejected:**
+  - *Forced Pre-Save:* Requiring a database save before running creates temporary or junk database records for every minor tweak tested by the user.
+- **Viva Defense Note:** Demonstrates thoughtful UX design: the planner can sketch and immediately test traffic behavior. Once satisfied with the layout, they can persist it to the database with a single click.
+
+---
+
+## ADR 025: Real-Time Dynamic Road Ribbons, Directional Chevrons, and Heatmap Shading
+
+- **Status:** Accepted (Stage 6)
+- **Context:** Road segments require intuitive visual cues indicating lane count, traffic flow direction, closure status, and real-time congestion levels.
+- **Decision:** Render roads as multi-layered ribbons:
+  1. Base asphalt pavement sized proportional to lane count ($\text{width} = \text{lanes} \times 4\text{m} \times \text{zoom}$).
+  2. White dashed longitudinal lane dividers.
+  3. Dynamic one-way flow chevrons along the road centerline.
+  4. Real-time congestion shading: Free Flow ($V/C < 0.5$, teal), Moderate ($0.5 \le V/C < 0.75$, amber), Heavy ($0.75 \le V/C < 0.9$, orange), and Congested ($V/C \ge 0.9$, rose-red).
+  5. Road closure hazard stripes with a prominent "CLOSED" warning marker for scenario testing.
+- **Alternatives Rejected:**
+  - *Simple 1-pixel line graphs:* Fails to convey lane capacity, multi-lane overtaking, or intersection physical footprint.
+- **Viva Defense Note:** Provides an immediate, aesthetically compelling representation of traffic conditions that non-technical stakeholders and examiners can instantly comprehend.

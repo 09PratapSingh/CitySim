@@ -89,20 +89,38 @@ CitySim/
 - npm or pnpm
 - MongoDB (Local instance or MongoDB Atlas URI)
 
-### Quickstart (Running Stages 1 - 4)
-```bash
-# 1. Run unit tests for the simulation engine (42 tests)
-npm --prefix engine test
+### Quickstart (Running Full Platform)
 
-# 2. Run the interactive single-intersection CLI demo (Stage 1)
+```bash
+# 1. Run all unit & integration tests (46 tests: 42 engine + 4 server)
+npm test
+
+# 2. Build the React frontend
+npm run build
+
+# 3. Start the server (serves both API, WebSockets, and React frontend on port 5000)
+npm start
+# Open http://localhost:5000 in your browser!
+
+# 4. Optional: Development mode with Vite HMR
+# Terminal 1: Backend
+npm run dev:server
+# Terminal 2: Frontend
+npm run dev:client
+# Open http://localhost:3000 (proxies API and WebSockets to backend)
+```
+
+### CLI Engine Demos (Stages 1 - 4)
+```bash
+# Single-intersection IDM physics demo (Stage 1)
 npm run demo:stage1
 
-# 3. Run the multi-road A* routing & road closure detour demo (Stage 2)
+# Multi-road A* routing & detour demo (Stage 2)
 npm run demo:stage2
 
-# 4. Run the Fixed-Time vs. Adaptive Signal comparison demo (Stage 3)
+# Fixed-Time vs. Adaptive Signal demo (Stage 3)
 npm run demo:stage3
 
-# 5. Run the O-D Matrix & Performance Metrics demo (Stage 4)
+# O-D Matrix & Performance Metrics demo (Stage 4)
 npm run demo:stage4
 ```

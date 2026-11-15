@@ -549,18 +549,23 @@ This document records the critical architectural, algorithmic, and engineering d
 - **Status:** Accepted (Stage 9)
 - **Context:** Early iterations of CitySim rendered the network as an abstract wireframe dark graph with simple lines and monochromatic circular dots. Transportation engineers, urban planners, and examiners require realistic civil infrastructure visuals (paved road surfaces, marked lane divisions, directional flow cues, stop lines, pedestrian crossings, signal heads, and distinct vehicle silhouettes with dynamic brake lights) while maintaining 60 FPS performance without WebGL overhead.
 - **Decision:**
-  1. **Canvas Viewport Cartography:**
-     - Replace the black canvas with a soft off-white urban canvas fill (`#f8fafc`) with subtle Cartesian grid lines (`#e2e8f0`) and major 100m coordinate grid markers (`#cbd5e1`).
-     - Multi-layer road rendering: An outer concrete shoulder base (`#94a3b8`) 3px wider than asphalt, a deep charcoal asphalt roadbed (`#1e293b`), crisp white dashed lane dividers (`[12, 10]`), and directional flow chevrons stamped along lane centerlines.
+  1. **Canvas Viewport Cartography & 2.5D Jaipur Urban Fabric:**
+     - Replace the stark white grid with a warm earthy sandy loam terrain base (`#e6dfce`) with organic parcel dividers and Charbagh-inspired garden quadrangles with Gulmohar blossom trees (`#ea580c`).
+     - Procedurally generate 2.5D extruded buildings inspired by Jaipur's architectural heritage (terracotta havelis, Dholpur sandstone complexes, Jaisalmer golden ochre blocks) featuring shaded east walls, ambient sunlit front facades with arched Jharokha window niches, elevated sunlit terrace roofs with internal courtyards, traditional rooftop chhatris (pavilions), water tanks, and directional ground drop shadows.
+     - Multi-layer 2.5D road rendering: Light gray concrete curb shoulder underlay (`#cbd5e1`) with global drop shadow (`shadowColor: rgba(50,38,25,0.22)`, `shadowBlur: 10`, offset 2px, 4px) to make the entire road network visually "pop" off the ground plane.
+     - Authentic matte charcoal gray asphalt (`#334155`), crisp white outer margin lines, white dashed lane dividers (`[12, 10]`), and directional flow chevrons.
      - Closed road corridors feature high-visibility alternating yellow/black warning chevrons and a prominent "ROAD CLOSED" safety barricade badge.
-  2. **Paved Junctions & Signal Infrastructure:**
-     - Render intersections as continuous paved asphalt junction hubs with concrete perimeter curbs.
-     - Signalized junctions feature yellow cross-hatch "Keep Clear" box junction markings (`rgba(234, 179, 8, 0.5)`).
+  2. **Seamless Paved Junctions & Signal Infrastructure:**
+     - Completely eliminate circular node outlines and borders. Intersections are rendered as seamless flat asphalt junction boxes matching the road's `#334155` matte charcoal surface.
+     - Signalized and multi-leg intersections feature yellow cross-hatch "Keep Clear" box junction markings (`#eab308` border with 45-degree diagonal cross-hatch).
+     - In Editor mode, nodes feature modern corner target brackets `[ ]` on selection/hover; in Simulation mode, zero node outlines or artifacts are shown.
      - Incoming approaches feature 3.5px solid white stop bars, pedestrian zebra crossings, and realistic 3-aspect roadside signal housings with illuminated active lenses (Red, Amber, Green).
-  3. **Vehicle Geometries & Kinematic Illumination:**
-     - Replace dots with top-down rectangular vehicle models with rounded corners (cars: 4.8m x 2.0m, buses/trucks: 9.0m x 2.5m) and subtle drop shadows for depth.
-     - Vehicles feature dark-tinted windshields/roofs, forward-facing warm headlights (`#fef08a`), and reactive glowing red brake lights that dynamically illuminate when decelerating or queued (`#ef4444` active brake, `#991b1b` cruising).
-     - Palette colors are deterministically hashed from vehicle IDs across 8 vibrant pigments (`#ef4444`, `#2563eb`, `#10b981`, `#f97316`, `#8b5cf6`, `#06b6d4`, `#ec4899`, `#eab308`).
+  3. **High-Fidelity 2D Vehicle Sprites & Kinematic Illumination:**
+     - Realistic vehicle models: Sleek passenger sedans/SUVs with curved glass windshields, specular reflection streaks, hood panels, and mirrors; iconic Indian green-and-yellow Auto-Rickshaws (Tuk-Tuks) with tapered front forks; and heavy two-tone municipal buses with rooftop ribs.
+     - Vehicles feature 2.5D directional drop shadows (`rgba(50, 40, 25, 0.28)`), warm LED headlights with illuminated projection cones, and reactive glowing red taillights/brake lights (`#ef4444` active brake, `#991b1b` cruising).
+  4. **Off-Screen Canvas Static Layer Caching (60 FPS Performance):**
+     - Static background layers (earthy terrain, organic parks, and 2.5D extruded buildings) are pre-rendered and cached onto an off-screen HTML5 canvas buffer.
+     - During the 60 FPS live simulation loop, the static city environment is blitted in a single GPU draw call (`ctx.drawImage`), reserving CPU cycles exclusively for vehicle kinematics, signal cycles, and real-time traffic animation.
   4. **Day Mode UI Panels & Theme Cohesion:**
      - Transition all control panels, toolbars, sidebars, charts, modals, and metric overlays to a high-contrast Day Mode palette (white cards, slate-200 borders, slate-800 text, slate-50 canvas footers, and vibrant indigo/emerald accents).
   5. **Resilient WebSocket Auto-Reconnection:**
@@ -569,3 +574,59 @@ This document records the critical architectural, algorithmic, and engineering d
   - *Migrating to Three.js / WebGL:* Unnecessary complexity, higher memory footprint, and slower cold-start initialization compared to pure 2D Canvas.
   - *SVG Vehicle Elements:* High DOM node count creates garbage collection pauses and frame drops during high-density simulations (500+ vehicles).
 - **Viva Defense Note:** Demonstrates performance-oriented graphics engineering on standard HTML5 2D Canvas, achieving 60 FPS rendering with professional CAD/GIS-grade cartography without external rendering libraries.
+
+---
+
+## ADR 040: Seamless Unbroken Asphalt Road Network & Flat Square Junction Fusion
+
+- **Status:** Accepted (Stage 9 Refinement)
+- **Context:** Previous canvas iterations drew circular arcs (`ctx.arc`) at all nodes, including boundary/dead-end nodes (`node_west`, `node_north`, `node_south`, `node_east`), and some components used `lineCap = 'round'`. This caused road segments to visually resemble disconnected floating dark "pills" with rounded end caps, while circular junction discs chopped off outer white margin lines.
+- **Decision:**
+  1. **Strict Flush Butt Line Terminations:**
+     - Enforce `ctx.lineCap = 'butt'` across all road strokes, concrete curb strips, outer curb margin lines, lane dividers, approach stop lines, and pedestrian zebra crossings in both `CanvasViewport.tsx` and `ComparisonDashboard.tsx`.
+     - Completely eliminate circular arc drawing (`ctx.arc`) for dead-end or boundary nodes (`degree <= 1`). Road segments and curb underlays terminate flush and squarely at terminal node coordinates with zero rounded protrusion.
+  2. **Identical Asphalt Color Matching & Visual Fusion:**
+     - Guarantee that road segments and intersection junction boxes use the exact same fill color (`#334155`).
+     - Render road segments first as rectangular polygons with `ctx.fillStyle = '#334155'`, then immediately render flat square intersection junction boxes (`boxSize = maxLanes * laneWidthPx`) over them using `#334155` with zero borders and zero strokes.
+     - The overlapping fills fuse seamlessly at the pixel level into a single, contiguous, unbroken asphalt sheet.
+  3. **Markings Layering & Clean Junction Clearance:**
+     - Solid white outer curb margin lines calculate junction entrance clearance (`startX` and `endX`) based on the degrees of connecting endpoints, stopping neatly at intersection junction borders rather than cutting through the intersection.
+     - Yellow "Keep Clear" cross-hatch box markings (`#eab308` border, 45-degree diagonal cross-hatching) and solid white approach stop lines (3.5px) are painted cleanly on top of the fused asphalt layer.
+- **Alternatives Rejected:**
+  - *Rounded line caps (`lineCap = 'round'`):* Creates unsightly pill-shaped road terminations and bulging rounded intersection corners.
+  - *Drawing intersection discs after surface markings:* Crops white road boundary lines into circular arcs, creating visual fragmentation.
+- **Viva Defense Note:** Adheres to vector graphics composition best practices, eliminating geometric artifacts through strictly ordered painter's algorithm layering and flush polygon fusion.
+
+---
+
+## ADR 041: Native Non-Passive Wheel & Touch Event Listeners for Canvas Viewport Zoom
+
+- **Status:** Accepted (Stage 9 Refinement)
+- **Context:** In React, wheel event handlers attached via synthetic props (`onWheel`) are registered as passive by the browser by default. Calling `e.preventDefault()` inside a passive listener is disallowed and floods the browser console with hundreds of `Unable to preventDefault inside passive event listener invocation` errors, while also causing the outer page to scroll vertically during map zoom.
+- **Decision:**
+  1. Remove React synthetic `onWheel` from `<canvas>`.
+  2. In `CanvasViewport.tsx`, bind `wheel`, `touchstart`, and `touchmove` events natively inside a `useEffect` using `canvas.addEventListener('wheel', handleNativeWheel, { passive: false })`.
+  3. Ensure all native listeners are removed in the `useEffect` cleanup return function.
+  4. Call `e.preventDefault()` inside `handleNativeWheel` and `handleTouchMove` to cleanly suppress document page scrolling and support pinch-zoom gestures with zero browser console errors.
+- **Alternatives Rejected:**
+  - *React `onWheel` with CSS `overscroll-behavior: none`:* Does not eliminate browser console errors because the underlying listener remains passive.
+- **Viva Defense Note:** Demonstrates standard web browser event architecture knowledge, preventing default scroll propagation cleanly via native DOM event APIs.
+
+---
+
+## ADR 042: Live Simulation WebSocket Streaming Reliability & Viewport Bounding Auto-Fit
+
+- **Status:** Accepted (Stage 9 Refinement)
+- **Context:** In `server/src/sockets/simulationSocket.ts`, the `start_simulation` socket handler contained an undeclared identifier `map` when evaluating explicit origin-destination pairs (`(map as any)?.odPairs`). This threw an unhandled `ReferenceError: map is not defined`, caught by the try-catch block and emitted as `simulation_error`, preventing `simulation_started` from ever firing and causing the live clock to remain frozen at 00:00.0s. Furthermore, initial map viewport scaling set `zoom: 1.0` unconditionally, causing compact maps (e.g. 300m Default 4-Way) to render excessively small on wide screens.
+- **Decision:**
+  1. Fix the demand matrix initialization in `simulationSocket.ts`:
+     - Explicitly define `let baseMap: any = null;` before resolving maps.
+     - Evaluate `const explicitOD = activeScenario?.odPairs || (customMap as any)?.odPairs || baseMap?.odPairs;`
+     - Emit the initial simulation frame immediately upon starting the session loop so client telemetry and clocks initialize instantly at $t = 0.0\text{s}$.
+  2. Implement an automated headless integration test in `server/test/socket.test.ts` verifying the full WebSocket streaming lifecycle (`start_simulation`, progressive `simulation_frame` receipt, `pause`, `resume`, and `stop`).
+  3. Implement automated viewport bounding-box fitting in `App.tsx` (`loadMap` and `handleResetView`):
+     - Calculate $\Delta X = \max(X) - \min(X)$ and $\Delta Y = \max(Y) - \min(Y)$.
+     - Automatically scale zoom to occupy ~55-65% of current client window dimensions, clamped between $0.7\times$ and $2.5\times$.
+- **Alternatives Rejected:**
+  - *Hardcoding fixed zoom levels per map ID:* Fails to accommodate custom user-drawn maps or varying screen resolutions.
+- **Viva Defense Note:** Guarantees socket reliability via automated end-to-end integration testing and delivers immediate visual feedback upon simulation start.

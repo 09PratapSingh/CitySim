@@ -397,9 +397,26 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
 
     const width = canvas.width;
     const height = canvas.height;
-    // Off-white Day Mode schematic canvas background
-    ctx.fillStyle = '#f8fafc';
+    
+    // Warm earthy urban terrain base (Jaipur aesthetic)
+    ctx.fillStyle = '#e6dfce';
     ctx.fillRect(0, 0, width, height);
+
+    // Subtle terrain grid
+    ctx.strokeStyle = 'rgba(165, 145, 120, 0.25)';
+    ctx.lineWidth = 0.6;
+    for (let gx = 25; gx < width; gx += 30) {
+      ctx.beginPath();
+      ctx.moveTo(gx, 0);
+      ctx.lineTo(gx, height);
+      ctx.stroke();
+    }
+    for (let gy = 25; gy < height; gy += 30) {
+      ctx.beginPath();
+      ctx.moveTo(0, gy);
+      ctx.lineTo(width, gy);
+      ctx.stroke();
+    }
 
     if (map.nodes.length === 0) return;
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -418,6 +435,48 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
     const transformX = (x: number) => padding + (x - minX) * scale;
     const transformY = (y: number) => padding + (y - minY) * scale;
 
+    // Draw procedural miniature 2.5D Jaipur building footprints in open parcels
+    ctx.save();
+    for (let bx = minX - 100; bx <= maxX + 100; bx += 70) {
+      for (let by = minY - 100; by <= maxY + 100; by += 70) {
+        const seed = Math.sin(bx * 12.9898 + by * 78.233) * 43758.5453;
+        const rand = seed - Math.floor(seed);
+
+        // Check distance to all roads
+        let minD = Infinity;
+        for (const e of map.edges) {
+          const fn = map.nodes.find((n) => n.id === e.fromNodeId);
+          const tn = map.nodes.find((n) => n.id === e.toNodeId);
+          if (!fn || !tn) continue;
+          const dx = tn.x - fn.x, dy = tn.y - fn.y;
+          const l2 = dx * dx + dy * dy;
+          const t = l2 === 0 ? 0 : Math.max(0, Math.min(1, ((bx - fn.x) * dx + (by - fn.y) * dy) / l2));
+          const px = fn.x + t * dx, py = fn.y + t * dy;
+          const d = Math.hypot(bx - px, by - py);
+          if (d < minD) minD = d;
+        }
+
+        if (minD > 38) {
+          const sx = transformX(bx);
+          const sy = transformY(by);
+          const bw = 20 * scale;
+          const bh = 16 * scale;
+          if (sx > 10 && sx < width - 10 && sy > 10 && sy < height - 10 && bw > 6) {
+            // Drop shadow
+            ctx.fillStyle = 'rgba(60, 42, 28, 0.16)';
+            ctx.fillRect(sx - bw / 2 + 1.5, sy - bh / 2 + 2, bw, bh);
+            // Body in Jaipur sandstone/terracotta/ochre
+            ctx.fillStyle = rand < 0.25 ? '#cf6b54' : rand < 0.5 ? '#d99763' : rand < 0.75 ? '#dfb768' : '#c2dfa3';
+            ctx.fillRect(sx - bw / 2, sy - bh / 2, bw, bh);
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+            ctx.lineWidth = 0.6;
+            ctx.strokeRect(sx - bw / 2, sy - bh / 2, bw, bh);
+          }
+        }
+      }
+    }
+    ctx.restore();
+
     // Sort edges so open edges are drawn first and closed edges are drawn on top
     const sortedEdges = [...map.edges].sort((a, b) => {
       const aClosed = isScenario && (a.isClosed || closedEdgeIds.includes(a.id));
@@ -427,7 +486,38 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
       return 0;
     });
 
-    // Draw Edges
+    // Pass 1: Concrete Curb Underlay with Global Drop Shadow
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 3;
+    ctx.fillStyle = '#cbd5e1'; // light concrete curb gray
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineCap = 'butt';
+
+    sortedEdges.forEach((edge) => {
+      const fromNode = map.nodes.find((n) => n.id === edge.fromNodeId);
+      const toNode = map.nodes.find((n) => n.id === edge.toNodeId);
+      if (!fromNode || !toNode) return;
+      ctx.lineWidth = 14;
+      ctx.beginPath();
+      ctx.moveTo(transformX(fromNode.x), transformY(fromNode.y));
+      ctx.lineTo(transformX(toNode.x), transformY(toNode.y));
+      ctx.stroke();
+    });
+
+    map.nodes.forEach((node) => {
+      const connecting = map.edges.filter((e) => e.fromNodeId === node.id || e.toNodeId === node.id);
+      if (connecting.length >= 2) {
+        const nx = transformX(node.x);
+        const ny = transformY(node.y);
+        ctx.fillRect(nx - 7, ny - 7, 14, 14);
+      }
+    });
+    ctx.restore();
+
+    // Pass 2: Matte Charcoal Asphalt Roadbeds & Junctions (#334155)
     sortedEdges.forEach((edge) => {
       const fromNode = map.nodes.find((n) => n.id === edge.fromNodeId);
       const toNode = map.nodes.find((n) => n.id === edge.toNodeId);
@@ -446,10 +536,10 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
       if (hasReverse) {
         const dx = x2 - x1;
         const dy = y2 - y1;
-        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        const len = Math.hypot(dx, dy) || 1;
         const nx = -dy / len;
         const ny = dx / len;
-        const offset = 3.0; // 3px lateral offset to the right of forward direction
+        const offset = 2.5;
         drawX1 = x1 + nx * offset;
         drawY1 = y1 + ny * offset;
         drawX2 = x2 + nx * offset;
@@ -459,23 +549,23 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
       const isClosed = isScenario && (edge.isClosed || closedEdgeIds.includes(edge.id));
       const cong = congestionData ? congestionData[edge.id] : null;
 
-      let strokeColor = '#334155';
+      let strokeColor = '#334155'; // Matte charcoal asphalt
       if (isClosed) {
         strokeColor = '#e11d48';
       } else if (cong) {
         switch (cong.congestionLevel) {
-          case 'FREE_FLOW': strokeColor = '#10b981'; break;
-          case 'MODERATE': strokeColor = '#eab308'; break;
-          case 'HEAVY': strokeColor = '#f97316'; break;
+          case 'FREE_FLOW': strokeColor = '#334155'; break;
+          case 'MODERATE': strokeColor = '#475569'; break;
+          case 'HEAVY': strokeColor = '#d97706'; break;
           case 'CONGESTED': strokeColor = '#ef4444'; break;
           default: strokeColor = '#334155';
         }
       }
 
       ctx.save();
-      ctx.lineWidth = hasReverse ? 5 : 8;
+      ctx.lineWidth = hasReverse ? 6 : 9;
       ctx.strokeStyle = strokeColor;
-      ctx.lineCap = 'round';
+      ctx.lineCap = 'butt';
 
       if (isClosed) {
         ctx.setLineDash([8, 6]);
@@ -488,10 +578,11 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
       ctx.lineTo(drawX2, drawY2);
       ctx.stroke();
 
+      // Dashed lane divider
       if (!isClosed) {
         ctx.lineWidth = 1;
-        ctx.strokeStyle = '#f8fafc33';
-        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+        ctx.setLineDash([5, 5]);
         ctx.beginPath();
         ctx.moveTo(drawX1, drawY1);
         ctx.lineTo(drawX2, drawY2);
@@ -502,43 +593,52 @@ export const ComparisonDashboard: React.FC<ComparisonDashboardProps> = ({
       const midY = (drawY1 + drawY2) / 2;
       if (isClosed) {
         ctx.font = 'bold 10px sans-serif';
-        ctx.fillStyle = '#fee2e2';
+        ctx.fillStyle = '#b91c1c';
         ctx.fillText('🚧 CLOSED', midX - 25, midY - 8);
       } else if (cong && cong.densityRatio > 0.05) {
         ctx.font = '9px monospace';
-        ctx.fillStyle = '#cbd5e1';
+        ctx.fillStyle = '#475569';
         ctx.fillText(`V/C: ${cong.volumeToCapacityRatio?.toFixed(2) || '0.00'}`, midX - 18, midY - 6);
       }
 
       ctx.restore();
     });
 
-    // Draw Nodes
+    // Pass 3: Flat Asphalt Junction Boxes (No Circular Outlines!) & Yellow Cross-Hatch
     map.nodes.forEach((node) => {
+      const connecting = map.edges.filter((e) => e.fromNodeId === node.id || e.toNodeId === node.id);
+      if (connecting.length < 2) return; // Skip dead ends / boundary nodes
+
       const nx = transformX(node.x);
       const ny = transformY(node.y);
+      const isSignal = node.controlType === 'fixed_signal' || node.controlType === 'adaptive_signal' ||
+        (isScenario && (stagedScenario as any)?.modifications?.signalOverrides?.some((s: any) => s.nodeId === node.id));
 
       ctx.save();
-      ctx.beginPath();
-      ctx.arc(nx, ny, 10, 0, Math.PI * 2);
+      // Flat asphalt junction box for multi-way nodes (degree >= 2) - NO circular arcs!
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(nx - 5, ny - 5, 10, 10);
 
-      if (node.controlType === 'adaptive_signal' || (isScenario && (stagedScenario as any)?.modifications?.signalOverrides?.some((s: any) => s.nodeId === node.id && s.controlType === 'adaptive_signal'))) {
-        ctx.fillStyle = '#059669';
-        ctx.strokeStyle = '#34d399';
-      } else if (node.controlType === 'fixed_signal') {
-        ctx.fillStyle = '#d97706';
-        ctx.strokeStyle = '#fbbf24';
-      } else {
-        ctx.fillStyle = '#1e293b';
-        ctx.strokeStyle = '#64748b';
+      // Yellow "Keep Clear" Box Junction Markings for signals
+      if (isSignal) {
+        const bs = 12;
+        ctx.strokeStyle = '#eab308';
+        ctx.lineWidth = 1.2;
+        ctx.lineCap = 'butt';
+        ctx.strokeRect(nx - bs / 2, ny - bs / 2, bs, bs);
+
+        ctx.strokeStyle = 'rgba(234, 179, 8, 0.7)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(nx - bs / 2, ny - bs / 2);
+        ctx.lineTo(nx + bs / 2, ny + bs / 2);
+        ctx.moveTo(nx - bs / 2, ny + bs / 2);
+        ctx.lineTo(nx + bs / 2, ny - bs / 2);
+        ctx.stroke();
       }
 
-      ctx.lineWidth = 2;
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.font = '9px sans-serif';
-      ctx.fillStyle = '#94a3b8';
+      ctx.font = '600 9px sans-serif';
+      ctx.fillStyle = '#64748b';
       ctx.fillText(node.id, nx - 12, ny + 18);
       ctx.restore();
     });

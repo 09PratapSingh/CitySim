@@ -136,7 +136,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
             {!isRunning ? (
               <button
-                onClick={onStartSimulation}
+                onClick={() => {
+                  console.debug('[Navbar] Run clicked -> onStartSimulation');
+                  onStartSimulation();
+                }}
                 className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-xs transition"
               >
                 <Play className="w-3.5 h-3.5 fill-current" />

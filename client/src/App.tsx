@@ -75,11 +75,11 @@ export const App: React.FC = () => {
   const [availableMaps, setAvailableMaps] = useState<MapData[]>([]);
   const [selection, setSelection] = useState<SelectedElement | null>(null);
 
-  // Viewport Transform (Center initial 4-way intersection)
+  // Viewport Transform (Auto-centered at default 4-way intersection)
   const [viewport, setViewport] = useState<ViewportTransform>({
-    x: 400,
-    y: 300,
-    zoom: 1.0,
+    x: 200,
+    y: 200,
+    zoom: 1.5,
   });
 
   // Simulation State & WebSockets
@@ -128,11 +128,27 @@ export const App: React.FC = () => {
     setSelection(null);
     setHasUnsavedChanges(false);
 
-    // Center viewport on map bounding box
+    // Center and auto-fit viewport on map bounding box
     if (data.nodes && data.nodes.length > 0) {
-      const avgX = data.nodes.reduce((sum, n) => sum + n.x, 0) / data.nodes.length;
-      const avgY = data.nodes.reduce((sum, n) => sum + n.y, 0) / data.nodes.length;
-      setViewport({ x: avgX, y: avgY, zoom: 1.0 });
+      const minX = Math.min(...data.nodes.map((n) => n.x));
+      const maxX = Math.max(...data.nodes.map((n) => n.x));
+      const minY = Math.min(...data.nodes.map((n) => n.y));
+      const maxY = Math.max(...data.nodes.map((n) => n.y));
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+
+      const spanX = Math.max(120, maxX - minX);
+      const spanY = Math.max(120, maxY - minY);
+
+      const clientW = typeof window !== 'undefined' && window.innerWidth > 0 ? window.innerWidth : 1200;
+      const clientH = typeof window !== 'undefined' && window.innerHeight > 0 ? window.innerHeight : 800;
+      const targetW = clientW * 0.55;
+      const targetH = clientH * 0.55;
+
+      const idealZoom = Math.min(targetW / spanX, targetH / spanY);
+      const clampedZoom = Math.max(0.7, Math.min(2.5, Number(idealZoom.toFixed(2))));
+
+      setViewport({ x: centerX, y: centerY, zoom: clampedZoom });
     }
   };
 
@@ -252,16 +268,33 @@ export const App: React.FC = () => {
 
   const handleResetView = useCallback(() => {
     if (nodes.length === 0) {
-      setViewport({ x: 400, y: 300, zoom: 1.0 });
+      setViewport({ x: 200, y: 200, zoom: 1.5 });
       return;
     }
-    const avgX = nodes.reduce((sum, n) => sum + n.x, 0) / nodes.length;
-    const avgY = nodes.reduce((sum, n) => sum + n.y, 0) / nodes.length;
-    setViewport({ x: avgX, y: avgY, zoom: 1.0 });
+    const minX = Math.min(...nodes.map((n) => n.x));
+    const maxX = Math.max(...nodes.map((n) => n.x));
+    const minY = Math.min(...nodes.map((n) => n.y));
+    const maxY = Math.max(...nodes.map((n) => n.y));
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    const spanX = Math.max(120, maxX - minX);
+    const spanY = Math.max(120, maxY - minY);
+
+    const clientW = typeof window !== 'undefined' && window.innerWidth > 0 ? window.innerWidth : 1200;
+    const clientH = typeof window !== 'undefined' && window.innerHeight > 0 ? window.innerHeight : 800;
+    const targetW = clientW * 0.55;
+    const targetH = clientH * 0.55;
+
+    const idealZoom = Math.min(targetW / spanX, targetH / spanY);
+    const clampedZoom = Math.max(0.7, Math.min(2.5, Number(idealZoom.toFixed(2))));
+
+    setViewport({ x: centerX, y: centerY, zoom: clampedZoom });
   }, [nodes]);
 
   // Simulation Trigger Handlers
   const handleStartSim = () => {
+    console.debug('[App] handleStartSim invoked: mapId=', mapId, 'nodes=', nodes.length, 'edges=', edges.length, 'seed=', seed);
     // Start simulation using mapId or live canvas geometry
     sim.startSimulation(mapId || undefined, {
       customMap: { nodes, edges },

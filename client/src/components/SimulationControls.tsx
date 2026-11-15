@@ -53,7 +53,10 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
       <div className="flex items-center gap-1.5 pr-3 border-r border-slate-200">
         {!isRunning ? (
           <button
-            onClick={onStart}
+            onClick={() => {
+              console.debug('[SimulationControls] Start clicked -> onStart');
+              onStart();
+            }}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition active:scale-95"
             title="Start Simulation"
           >

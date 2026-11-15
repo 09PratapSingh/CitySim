@@ -41,23 +41,25 @@ export function setupSimulationSockets(io: SocketIOServer): void {
         cleanupSession(socket.id);
 
         const { baseMapId, customMap, scenarioId, seed = 42, speedMultiplier = 1.0 } = payload;
-        
+        console.debug(`[simulationSocket] start_simulation received: socket=${socket.id}, baseMapId=${baseMapId}, hasCustomMap=${!!customMap}, scenarioId=${scenarioId}, seed=${seed}`);
+
+        let baseMap: any = null;
+        if (baseMapId) {
+          baseMap = await DataStore.getMapById(baseMapId);
+        }
+
         let mapNodes: any[] = [];
         let mapEdges: any[] = [];
 
         if (customMap && Array.isArray(customMap.nodes) && customMap.nodes.length > 0) {
           mapNodes = customMap.nodes;
           mapEdges = customMap.edges || [];
-        } else if (baseMapId) {
-          const baseMap = await DataStore.getMapById(baseMapId);
-          if (!baseMap) {
-            socket.emit('simulation_error', { message: `Base map '${baseMapId}' not found.` });
-            return;
-          }
+        } else if (baseMap) {
           mapNodes = baseMap.nodes;
           mapEdges = baseMap.edges;
         } else {
-          socket.emit('simulation_error', { message: 'No base map or custom map provided.' });
+          console.debug(`[simulationSocket] Error: No base map or custom map found for baseMapId=${baseMapId}`);
+          socket.emit('simulation_error', { message: baseMapId ? `Base map '${baseMapId}' not found.` : 'No base map or custom map provided.' });
           return;
         }
 
@@ -104,7 +106,7 @@ export function setupSimulationSockets(io: SocketIOServer): void {
         const odMatrix = new ODMatrix();
         const allNodes = graph.getAllNodes();
 
-        const explicitOD = activeScenario?.odPairs || (map as any)?.odPairs;
+        const explicitOD = activeScenario?.odPairs || (customMap as any)?.odPairs || baseMap?.odPairs;
         if (Array.isArray(explicitOD) && explicitOD.length > 0) {
           for (const od of explicitOD) {
             odMatrix.setFlow(
@@ -159,12 +161,14 @@ export function setupSimulationSockets(io: SocketIOServer): void {
         // Start frame interval (emits every 100ms / speedMultiplier)
         startSessionLoop(socket, session);
 
+        console.debug(`[simulationSocket] Emitting simulation_started for socket=${socket.id}, map=${baseMapId}`);
         socket.emit('simulation_started', {
           baseMapId,
           scenarioName,
           seed,
         });
       } catch (err: any) {
+        console.error(`[simulationSocket] Exception in start_simulation:`, err);
         socket.emit('simulation_error', { message: err.message });
       }
     });
@@ -223,6 +227,9 @@ export function setupSimulationSockets(io: SocketIOServer): void {
     // 20 updates per second (50ms interval)
     const baseIntervalMs = 50;
     const intervalMs = Math.max(15, Math.round(baseIntervalMs / session.speedMultiplier));
+
+    // Emit initial frame immediately so client clock & state updates without waiting for first interval
+    broadcastFrame(socket, session);
 
     session.timer = setInterval(() => {
       if (!session.isPaused) {

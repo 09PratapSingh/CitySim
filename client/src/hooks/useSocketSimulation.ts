@@ -59,50 +59,60 @@ export function useSocketSimulation(): UseSocketSimulationReturn {
     socketRef.current = socket;
 
     socket.on('connect', () => {
+      console.debug('[useSocketSimulation] Connected to simulation socket:', socket.id);
       setIsConnected(true);
       setError(null);
     });
 
     socket.io.on('reconnect', () => {
+      console.debug('[useSocketSimulation] Reconnected to simulation socket');
       setIsConnected(true);
       setError(null);
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
+      console.debug('[useSocketSimulation] Disconnected from simulation socket:', reason);
       setIsConnected(false);
       setIsRunning(false);
     });
 
-    socket.on('connect_error', (_err) => {
+    socket.on('connect_error', (err) => {
+      console.debug('[useSocketSimulation] Socket connect error:', err.message);
       setIsConnected(false);
     });
 
-    socket.on('simulation_started', () => {
+    socket.on('simulation_started', (data) => {
+      console.debug('[useSocketSimulation] Received simulation_started event:', data);
       setIsRunning(true);
       setIsPaused(false);
       setError(null);
     });
 
     socket.on('simulation_frame', (frame: SimulationFrame) => {
+      console.debug('[useSocketSimulation] Received simulation_frame, time:', frame.time, 'vehicles:', frame.vehicles?.length);
       setCurrentFrame(frame);
       setMetrics(frame.metrics);
     });
 
     socket.on('simulation_paused', () => {
+      console.debug('[useSocketSimulation] Received simulation_paused');
       setIsPaused(true);
     });
 
     socket.on('simulation_resumed', () => {
+      console.debug('[useSocketSimulation] Received simulation_resumed');
       setIsPaused(false);
     });
 
     socket.on('simulation_stopped', () => {
+      console.debug('[useSocketSimulation] Received simulation_stopped');
       setIsRunning(false);
       setIsPaused(false);
       setCurrentFrame(null);
     });
 
     socket.on('simulation_error', (data: { message: string }) => {
+      console.debug('[useSocketSimulation] Received simulation_error:', data.message);
       setError(data.message);
       setIsRunning(false);
     });
@@ -113,15 +123,20 @@ export function useSocketSimulation(): UseSocketSimulationReturn {
   }, []);
 
   const startSimulation = useCallback((baseMapId?: string, options?: { customMap?: { nodes: any[]; edges: any[] }; scenarioId?: string; seed?: number; speedMultiplier?: number }) => {
-    if (!socketRef.current) return;
+    if (!socketRef.current) {
+      console.debug('[useSocketSimulation] startSimulation aborted: socketRef.current is null');
+      return;
+    }
     setError(null);
-    socketRef.current.emit('start_simulation', {
+    const payload = {
       baseMapId,
       customMap: options?.customMap,
       scenarioId: options?.scenarioId,
       seed: options?.seed ?? 42,
       speedMultiplier: options?.speedMultiplier ?? speed,
-    });
+    };
+    console.debug('[useSocketSimulation] Emitting start_simulation with payload:', payload);
+    socketRef.current.emit('start_simulation', payload);
   }, [speed]);
 
   const pauseSimulation = useCallback(() => {
